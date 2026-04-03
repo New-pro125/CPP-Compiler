@@ -1,0 +1,5 @@
+tests/
+lex.yy.c
+parser
+parser.tab.*
+run_tests.sh
