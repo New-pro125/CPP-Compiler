@@ -15,6 +15,7 @@ set(
     COMPILER_CORE_SOURCES
     ${FLEX_Lexer_OUTPUTS}
     ${BISON_Parser_OUTPUTS}
+    src/quadruple_generator.cpp
 )
 
 
