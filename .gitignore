@@ -2,4 +2,4 @@ tests/
 lex.yy.c
 parser
 parser.tab.*
-run_tests.sh
+team7_v1.*
