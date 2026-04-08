@@ -340,6 +340,3 @@ void yyerror(const char* s) {
     std::fprintf(stderr, "Syntax error [line %d]: %s\n", yylineno, s);
 }
 
-int main() {
-    return yyparse();
-}

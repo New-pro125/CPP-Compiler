@@ -15,6 +15,7 @@ set(
     COMPILER_CORE_SOURCES
     ${FLEX_Lexer_OUTPUTS}
     ${BISON_Parser_OUTPUTS}
+    src/compiler.cpp
     src/quadruple_generator.cpp
     src/error_handler.cpp
 )
@@ -23,6 +24,7 @@ set(
 add_executable(
     compiler
     ${COMPILER_CORE_SOURCES}
+    src/main.cpp
 )
 target_include_directories(compiler PRIVATE src ${CMAKE_CURRENT_BINARY_DIR})
 target_compile_options(compiler PRIVATE -Wall -Wextra -Wno-unused-function)

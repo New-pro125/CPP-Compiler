@@ -21,6 +21,8 @@ class ErrorHandler
 {
 private:
     std::vector<CompilerError> errors;
+
+public:
     void addSyntaxError(int line, const std::string &msg);
     void addSemanticError(int line, const std::string &msg);
     void addWarning(int line, const std::string &msg);

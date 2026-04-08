@@ -3,3 +3,9 @@ lex.yy.c
 parser
 parser.tab.*
 team7_v1.*
+
+build/*
+!build/compiler
+!build/lexer.cpp
+!build/parser.cpp
+!build/parser.tab.h

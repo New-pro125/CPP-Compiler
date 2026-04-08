@@ -21,6 +21,7 @@ public:
     void backpatch(std::vector<int> &indices, const std::string &label);
     std::vector<int> merge(const std::vector<int> &left, const std::vector<int> &right) const;
     const std::vector<Quadruple> &getQuadraples() const;
+    void print() const;
 };
 
 #endif

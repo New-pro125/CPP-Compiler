@@ -1,5 +1,5 @@
 #include "quadruple_generator.h"
-#include <sstream>
+#include <iostream>
 #include <iomanip>
 void QuadrupleGenerator::emit(const std::string &op, const std::string &arg1, const std::string &arg2, const std::string result)
 {
@@ -23,7 +23,7 @@ void QuadrupleGenerator::backpatch(std::vector<int> &indices, const std::string 
 {
     for (int idx : indices)
     {
-        if (idx >= 0 && idx < quads.size())
+        if (idx >= 0 && idx < (int)quads.size())
         {
             quads[idx].result = label;
         }
@@ -38,4 +38,17 @@ std::vector<int> QuadrupleGenerator::merge(const std::vector<int> &left, const s
 const std::vector<Quadruple> &QuadrupleGenerator::getQuadraples() const
 {
     return quads;
+}
+void QuadrupleGenerator::print() const
+{
+    std::cout << "\nQuadruples\n";
+    std::cout << std::left << std::setw(7) << "INDEX" << std::setw(12) << "OPERATOR" << std::setw(12)
+              << "ARG1" << std::setw(12) << "ARG2" << std::setw(12) << "RESULT" << "\n";
+    std::cout << "-------------------------------------------------------\n";
+    for (size_t i = 0; i < quads.size(); ++i)
+    {
+        const auto &q = quads[i];
+        std::cout << std::left << std::setw(7) << i + 1 << std::setw(12) << q.oper << std::setw(12) << q.arg1
+                  << std::setw(12) << q.arg2 << std::setw(12) << q.result << "\n";
+    }
 }

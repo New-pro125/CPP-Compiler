@@ -42,10 +42,10 @@ void ErrorHandler::print() const
         if (e.errorType == ErrorType::Warning)
         {
             std::cout << "\033[33m" << "Warning at Line" << e.line << ": " << e.message << "\n";
-            std::cout << "\033[0m"; // Reset to default color
+            std::cout << "\033[0m";
         }
         std::string error_type = (e.errorType == ErrorType::Semantic) ? "Semantic" : "Syntax";
         std::cout << "\033[31m" << error_type << " Error at Line" << e.line << ": " << e.message << "\n";
-        std::cout << "\033[0m"; // Reset to default color
+        std::cout << "\033[0m";
     }
 }
