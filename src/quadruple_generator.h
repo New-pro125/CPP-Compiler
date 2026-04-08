@@ -1,7 +1,6 @@
 #ifndef QUADRAPLE_GENERATOR_H
 #define QUADRAPLE_GENERATOR_H
 
-#include <list>
 #include <vector>
 #include "quadruple.h"
 class QuadrupleGenerator
@@ -19,10 +18,9 @@ public:
     std::string newTemp();
     std::string newLabel();
 
-    void backpatch(std::list<int> &indices, const std::string &label);
-    std::list<int> merge(const std::list<int> &left, const std::list<int> &right) const;
+    void backpatch(std::vector<int> &indices, const std::string &label);
+    std::vector<int> merge(const std::vector<int> &left, const std::vector<int> &right) const;
     const std::vector<Quadruple> &getQuadraples() const;
-    std::string formatTable() const;
 };
 
 #endif
