@@ -11,10 +11,11 @@ extern YY_BUFFER_STATE yy_scan_string(const char *str);
 extern void yy_delete_buffer(YY_BUFFER_STATE buf);
 
 Compiler::Compiler()
-{
-    this->errorHandler = ErrorHandler();
-    this->quadGen = QuadrupleGenerator();
-}
+    : quadGen(),
+      errorHandler(),
+      symTable(),
+      semanticAnalyzer(&symTable, &quadGen, &errorHandler)
+{}
 
 bool Compiler::compile(const std::string &sourceCode)
 {
@@ -22,6 +23,13 @@ bool Compiler::compile(const std::string &sourceCode)
     YY_BUFFER_STATE buffer = yy_scan_string(sourceCode.c_str());
     const int parseResult = yyparse();
     yy_delete_buffer(buffer);
+
+    //check unused symbols and give warnings
+    std::vector<Symbol> unused = symTable.getUnusedSymbolsInCurrentScope();
+    for (const auto &sym : unused)
+        errorHandler.addWarning(sym.declaredLine,
+            "Variable '" + sym.name + "' declared but never used");
+
     return parseResult == 0 && !this->errorHandler.hasErrors();
 }
 
@@ -40,4 +48,18 @@ QuadrupleGenerator *Compiler::getQuadrupleGenerator()
 ErrorHandler *Compiler::getErrorHandler()
 {
     return &this->errorHandler;
+}
+void Compiler::printSymbolTable()
+{
+    symTable.printSymbolTable();
+}
+
+SymbolTable* Compiler::getSymbolTable()
+{
+    return &symTable;
+}
+
+SemanticAnalyzer* Compiler::getSemanticAnalyzer()
+{
+    return &semanticAnalyzer;
 }

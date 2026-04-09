@@ -18,6 +18,8 @@ set(
     src/compiler.cpp
     src/quadruple_generator.cpp
     src/error_handler.cpp
+    src/symbol_table.cpp       
+    src/semantic_analyzer.cpp  
 )
 
 

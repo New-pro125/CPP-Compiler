@@ -3,11 +3,16 @@
 #include <string>
 #include "quadruple_generator.h"
 #include "error_handler.h"
+#include "symbol_table.h"
+#include "semantic_analyzer.h"
+    
 class Compiler
 {
 private:
     QuadrupleGenerator quadGen;
     ErrorHandler errorHandler;
+    SymbolTable symTable;
+    SemanticAnalyzer semanticAnalyzer;
 
 public:
     Compiler();
@@ -16,5 +21,9 @@ public:
     void printQuadrapleTables() const;
     QuadrupleGenerator *getQuadrupleGenerator();
     ErrorHandler *getErrorHandler();
+    SymbolTable* getSymbolTable();
+    void printSymbolTable();
+    SemanticAnalyzer* getSemanticAnalyzer();
+
 };
 #endif

@@ -51,6 +51,14 @@ inline std::string typeToString(Type type)
     }
 }
 
+struct ExprAttr
+{
+    Type type = Type::UNKNOWN;
+    std::string place;
+    bool isLvalue = false;
+    bool isConst = false;
+};
+
 inline bool isNumericLike(Type type)
 {
     return type == Type::INT || type == Type::FLOAT || type == Type::DOUBLE ||
