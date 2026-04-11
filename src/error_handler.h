@@ -1,14 +1,14 @@
 #ifndef ERROR_HANDLER_H
 #define ERROR_HANDLER_H
-#include <vector>
+#include <map>
 #include <string>
 
 enum ErrorType
 {
-    Semantic,
-    Syntax,
-    Warning,
-    Unknown,
+    Warning = 0,
+    Syntax = 1,
+    Semantic = 2,
+    Unknown = 3,
 };
 struct CompilerError
 {
@@ -20,14 +20,14 @@ struct CompilerError
 class ErrorHandler
 {
 private:
-    std::vector<CompilerError> errors;
+    std::multimap<std::pair<int, int>, CompilerError> errors;
 
 public:
     void addSyntaxError(int line, const std::string &msg);
     void addSemanticError(int line, const std::string &msg);
     void addWarning(int line, const std::string &msg);
     bool hasErrors() const;
-    const std::vector<CompilerError> &getErrors() const;
+    const std::multimap<std::pair<int, int>, CompilerError> &getErrors() const;
     void print() const;
 };
 

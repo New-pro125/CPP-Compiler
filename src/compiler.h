@@ -5,7 +5,7 @@
 #include "error_handler.h"
 #include "symbol_table.h"
 #include "semantic_analyzer.h"
-    
+#include "parser_context.h"
 class Compiler
 {
 private:
@@ -13,6 +13,7 @@ private:
     ErrorHandler errorHandler;
     SymbolTable symTable;
     SemanticAnalyzer semanticAnalyzer;
+    ParserContext ctx;
 
 public:
     Compiler();
@@ -21,9 +22,8 @@ public:
     void printQuadrapleTables() const;
     QuadrupleGenerator *getQuadrupleGenerator();
     ErrorHandler *getErrorHandler();
-    SymbolTable* getSymbolTable();
+    SymbolTable *getSymbolTable();
     void printSymbolTable();
-    SemanticAnalyzer* getSemanticAnalyzer();
-
+    SemanticAnalyzer *getSemanticAnalyzer();
 };
 #endif

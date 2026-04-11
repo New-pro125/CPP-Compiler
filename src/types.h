@@ -6,7 +6,6 @@ enum class Type
 {
     INT,
     FLOAT,
-    DOUBLE,
     CHAR,
     BOOL,
     STRING,
@@ -36,8 +35,6 @@ inline std::string typeToString(Type type)
         return "int";
     case Type::FLOAT:
         return "float";
-    case Type::DOUBLE:
-        return "double";
     case Type::CHAR:
         return "char";
     case Type::BOOL:
@@ -58,10 +55,23 @@ struct ExprAttr
     bool isLvalue = false;
     bool isConst = false;
 };
-
+struct ParamList
+{
+    std::vector<Type> types;
+    std::vector<std::string> names;
+    std::vector<std::string> defaults;
+    std::vector<bool> isConst;
+};
+inline ExprAttr *makeExpr(const std::string &place, Type type)
+{
+    auto *e = new ExprAttr();
+    e->place = place;
+    e->type = type;
+    return e;
+}
 inline bool isNumericLike(Type type)
 {
-    return type == Type::INT || type == Type::FLOAT || type == Type::DOUBLE ||
+    return type == Type::INT || type == Type::FLOAT ||
            type == Type::CHAR || type == Type::BOOL;
 }
 

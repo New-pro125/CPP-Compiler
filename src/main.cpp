@@ -36,6 +36,8 @@ int main(int argc, char **argv)
     inst->printErrors();
     std::cout << "_____________________________\n";
     inst->printQuadrapleTables();
+    std::cout << "______________________________\n";
+    inst->printSymbolTable();
     delete inst;
     return compiled ? 0 : 2;
 }

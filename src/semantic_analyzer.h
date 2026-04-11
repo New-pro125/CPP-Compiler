@@ -10,12 +10,11 @@
 class SemanticAnalyzer
 {
 private:
+    SymbolTable *symTable;
 
-    SymbolTable* symTable;
+    QuadrupleGenerator *quadGen;
 
-    QuadrupleGenerator* quadGen;
-
-    ErrorHandler* errorHandler;
+    ErrorHandler *errorHandler;
     int typeRank(Type t) const;
     Type promoteType(Type a, Type b) const;
 
@@ -31,13 +30,12 @@ private:
     bool insideFunction = false;
 
 public:
-
-    SemanticAnalyzer(SymbolTable* st, QuadrupleGenerator* qg, ErrorHandler* eh);
-    Type checkBinaryOper(ExprAttr &left, ExprAttr &right, const std::string &op, int line);
+    SemanticAnalyzer(SymbolTable *st, QuadrupleGenerator *qg, ErrorHandler *eh);
+    Type checkBinaryOper(const ExprAttr &left, const ExprAttr &right, const std::string &op, int line);
     bool coerce(ExprAttr &expr, Type targetType, int line);
     bool validateAssignment(ExprAttr rhs, Type lhsType, int line);
     ExprAttr resolveIdentifier(const std::string &symbol_name, int line);
-    Type validateFunctionCall(const std::string &name, std::vector<ExprAttr> args, int line);
+    Type validateFunctionCall(const std::string &name, std::vector<ExprAttr> &args, int line);
     bool validateReturn(Type expected, ExprAttr *value, int line);
     bool checkAssignable(const std::string &name, int line);
     bool checkConstInitialized(const std::string &name, bool hasInitializer, int line);
@@ -50,7 +48,6 @@ public:
     void setCurrentFunction(const std::string &name, Type returnType);
     void clearCurrentFunction();
     Type getCurrentFunctionReturnType() const;
-
 };
 
 #endif

@@ -19,7 +19,6 @@ STRINGLITERAL \"(\\.|[^"\\])*\"
 
 "int"                           {return INT;}
 "float"                         {return FLOAT;}
-"double"                        {return DOUBLE;}
 "bool"                          {return BOOL;}
 "true"                          {yylval.ival = 1;return BOOL_LITERAL;}
 "false"                         {yylval.ival = 0;return BOOL_LITERAL;}
