@@ -20,6 +20,7 @@ struct ParserContext
     std::vector<Type> currParam;
     std::vector<std::string> currParamNames, currParamDefaults;
     std::vector<ExprAttr> passedArgs;
+    std::vector<std::string> switchExprStack;
     std::vector<std::string> breakLabels, continueLabels;
 };
 extern ParserContext *parserContext;

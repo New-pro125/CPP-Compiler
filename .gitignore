@@ -9,3 +9,4 @@ build/*
 !build/lexer.cpp
 !build/parser.cpp
 !build/parser.tab.h
+tmp/

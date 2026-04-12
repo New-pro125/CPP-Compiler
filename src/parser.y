@@ -49,7 +49,7 @@ extern int yylineno;
 %token BITWISEXOR BITWISEAND BITWISEOR RSHIFT LSHIFT BITWISENOT
 %token LSHIFTASSIGN RSHIFTASSIGN XORASSIGN ANDASSIGN ORASSIGN
 
-/* Non-terminal types */
+
 %type <typeval> type_spec
 %type <exprval> expr assign_expr logical_or_expr logical_and_expr
 %type <exprval> bitwise_or_expr bitwise_xor_expr bitwise_and_expr
@@ -92,7 +92,7 @@ decl
     | stmt
     ;
 
-/*----- TYPE SPECIFIER -----*/
+
 type_spec
     : INT       { $$ = Type::INT; }
     | FLOAT     { $$ = Type::FLOAT; }
@@ -102,7 +102,7 @@ type_spec
     | STRING    { $$ = Type::STRING; }
     ;
 
-/*----- VARIABLE DECLARATION -----*/
+
 var_decl
     : type_spec
       { CTX->currDeclType = $1; CTX->currDeclConst = false; }
@@ -251,7 +251,7 @@ param_decl
       }
     ;
 
-/*----- STATEMENTS -----*/
+
 stmt
     : expr_stmt
     | compound_stmt
@@ -292,7 +292,7 @@ compound_stmt
       }
     ;
 
-/* Separate rule for function body - scope already opened in func_decl */
+
 compound_stmt_func
     : LBRACE stmt_list RBRACE
       {
@@ -304,7 +304,7 @@ compound_stmt_func
       }
     ;
 
-/*----- IF-ELSE -----*/
+
 if_stmt
     : IF LPARENTHESIS expr RPARENTHESIS
       {
@@ -343,7 +343,7 @@ if_stmt
       }
     ;
 
-/*----- WHILE -----*/
+
 while_stmt
     : WHILE
       {
@@ -372,7 +372,7 @@ while_stmt
       }
     ;
 
-/*----- DO-WHILE -----*/
+
 do_while_stmt
     : DO
       {
@@ -410,7 +410,7 @@ do_while_stmt
       }
     ;
 
-/*----- FOR -----*/
+
 for_stmt
     : FOR LPARENTHESIS
       { ST->addScope(); }
@@ -496,13 +496,15 @@ expr_opt
     |           { $$ = new ExprAttr(); $$->place = ""; $$->type = Type::BOOL; }
     ;
 
-/*----- SWITCH -----*/
+
 switch_stmt
     : SWITCH LPARENTHESIS expr RPARENTHESIS
       {
+          ST->addScope();
           SA->enterSwitch();
           std::string endLabel = QG->newLabel();
           CTX->breakLabels.push_back(endLabel);
+          CTX->switchExprStack.push_back($3->place);
           $<sval>$ = strdup(($3->place + "," + endLabel).c_str());
           free($3);
       }
@@ -513,6 +515,10 @@ switch_stmt
           std::string endLabel = labels.substr(p + 1);
           QG->emit("LABEL", endLabel, "-", "-");
           CTX->breakLabels.pop_back();
+          if(!CTX->switchExprStack.empty()){
+            CTX->switchExprStack.pop_back();
+          }
+          ST->LeaveScope();
           SA->exitSwitch();
           free($<sval>5);
       }
@@ -528,9 +534,11 @@ case_item
       {
           std::string caseLabel = QG->newLabel();
           std::string nextCase = QG->newLabel();
-          /* Get switch expr from parent - simplified approach */
+          
           std::string temp = QG->newTemp();
-          QG->emit("EQ", "switch_expr", $2->place, temp);
+            std::string switchExpr = CTX->switchExprStack.back();
+          QG->emit("EQ", switchExpr, $2->place, temp);
+
           free($2);
           QG->emit("JMP_FALSE", temp, "-", nextCase);
           QG->emit("LABEL", caseLabel, "-", "-");
@@ -549,7 +557,7 @@ case_item
       stmt_list
     ;
 
-/*----- BREAK / CONTINUE / RETURN -----*/
+
 break_stmt
     : BREAK SEMICOLON
       {
