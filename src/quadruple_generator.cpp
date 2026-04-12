@@ -13,7 +13,8 @@ void QuadrupleGenerator::beginSuppression()
 }
 void QuadrupleGenerator::endSuppression()
 {
-    this->suppressionDepth = std::min(0, this->suppressionDepth - 1);
+    if (this->suppressionDepth > 0)
+        this->suppressionDepth--;
 }
 int QuadrupleGenerator::nextQuad() const
 {

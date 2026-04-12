@@ -6,6 +6,11 @@
 #include "quadruple_generator.h"
 #include "error_handler.h"
 
+struct SwitchCaseDispatch
+{
+    std::string literalPlace;
+    std::string caseLabel;
+};
 struct ParserContext
 {
     SymbolTable *symTable = nullptr;
@@ -21,6 +26,9 @@ struct ParserContext
     std::vector<std::string> currParamNames, currParamDefaults;
     std::vector<ExprAttr> passedArgs;
     std::vector<std::string> switchExprStack;
+    std::vector<std::vector<SwitchCaseDispatch>> switchDispatchCases;
+    std::vector<std::string> switchDispatchLabel;
+    std::vector<std::string> switchDefaultLabel;
     std::vector<bool> switchSkipCaseStack;
     std::vector<std::string> breakLabels, continueLabels;
 };

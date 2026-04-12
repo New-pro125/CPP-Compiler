@@ -442,7 +442,7 @@ Type SemanticAnalyzer::checkBinaryOper(const ExprAttr &left, const ExprAttr &rig
         // string concatenation
         if (l.type == Type::STRING || r.type == Type::STRING)
         {
-            if ((op == "PLUS" || op == "PLUSASSIGN") && l.type == Type::STRING && r.type == Type::STRING)
+            if ((op == "PLUS" || op == "PLUSASSIGN") && (l.type == Type::STRING && (r.type == Type::STRING || r.type == Type::CHAR)))
             {
                 return Type::STRING;
             }
@@ -555,7 +555,7 @@ void SemanticAnalyzer::enterSwitchContext()
 }
 void SemanticAnalyzer::leaveSwitchContext()
 {
-    this->exitSwitch();
-    this->symTable->LeaveScope();
     this->endSwitchCaseTracking();
+    this->symTable->LeaveScope();
+    this->exitSwitch();
 }

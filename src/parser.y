@@ -502,21 +502,40 @@ switch_stmt
       {
           SA->enterSwitchContext();
           std::string endLabel = QG->newLabel();
+          std::string dispatchLabel = QG->newLabel();
           CTX->breakLabels.push_back(endLabel);
           CTX->switchExprStack.push_back($3->place);
-          $<sval>$ = strdup(($3->place + "," + endLabel).c_str());
+          CTX->switchDispatchCases.emplace_back();
+          CTX->switchDispatchLabel.push_back(dispatchLabel);
+          CTX->switchDefaultLabel.push_back("");
+          QG->emit("JMP","-","-",dispatchLabel);
+          $<sval>$ = strdup(endLabel.c_str());
           free($3);
       }
       LBRACE case_list RBRACE
       {
-          std::string labels($<sval>5);
-          size_t p = labels.find(',');
-          std::string endLabel = labels.substr(p + 1);
-          QG->emit("LABEL", endLabel, "-", "-");
-          CTX->breakLabels.pop_back();
-          if(!CTX->switchExprStack.empty()){
-            CTX->switchExprStack.pop_back();
+          std::string endLabel($<sval>5);
+          QG->emit("JMP","-","-",endLabel);
+          std::string dispatchLabel = CTX->switchDispatchLabel.back();
+          QG->emit("LABEL",dispatchLabel,"-","-");
+          std::string switchExpr = CTX->switchExprStack.back();
+          for(const auto & entry:CTX->switchDispatchCases.back()){
+                std::string temp = QG->newTemp();
+                QG->emit("EQ",switchExpr,entry.literalPlace,temp);
+                QG->emit("JMP_TRUE",temp,"-",entry.caseLabel);
           }
+          if(!CTX->switchDefaultLabel.back().empty()){
+            QG -> emit("JMP","-","-",CTX->switchDefaultLabel.back());
+          }
+          else {
+            QG->emit("JMP","-","-",endLabel);
+          }
+          QG->emit("LABEL",endLabel,"-","-");
+          CTX->breakLabels.pop_back();
+          CTX->switchExprStack.pop_back();
+          CTX->switchDispatchCases.pop_back();
+          CTX->switchDispatchLabel.pop_back();
+          CTX->switchDefaultLabel.pop_back();
           SA->leaveSwitchContext();
           free($<sval>5);
       }
@@ -533,31 +552,26 @@ case_item
           std::string caseLabel = QG->newLabel();
           bool skipCase = !SA->validateCaseLabel(*$2,yylineno);
           CTX->switchSkipCaseStack.push_back(skipCase);
-          if(skipCase) QG->beginSuppression();
-          std::string nextCase = QG->newLabel();
-          
-          std::string temp = QG->newTemp();
-            std::string switchExpr = CTX->switchExprStack.back();
-          QG->emit("EQ", switchExpr, $2->place, temp);
+          if(skipCase) 
+            QG->beginSuppression();
+          else {
+            CTX->switchDispatchCases.back().push_back(SwitchCaseDispatch{$2->place,caseLabel});
+            QG->emit("LABEL",caseLabel,"-","-");
+          }
 
           free($2);
-          QG->emit("JMP_FALSE", temp, "-", nextCase);
-          QG->emit("LABEL", caseLabel, "-", "-");
-          $<sval>$ = strdup(nextCase.c_str());
+          
       }
       stmt_list
       {
-          bool skipCase = false;
           if(!CTX->switchSkipCaseStack.empty()){
+            bool skipCase = false;
             skipCase = CTX->switchSkipCaseStack.back();
             CTX->switchSkipCaseStack.pop_back();
             if(skipCase){
                 QG->endSuppression();
-            } else {
-                QG->emit("LABEL", std::string($<sval>4), "-", "-");
-            }
+            } 
           }
-          free($<sval>4);
       }
     | DEFAULT COLON
       {
@@ -565,9 +579,11 @@ case_item
           CTX->switchSkipCaseStack.push_back(skipDefault);
           if(skipDefault){
                 QG->beginSuppression();
+          } else {
+            std::string defLabel = QG->newLabel();
+            CTX->switchDefaultLabel.back() = defLabel;
+            QG->emit("LABEL",defLabel,"-","-");
           }
-          std::string defLabel = QG->newLabel();
-          QG->emit("LABEL", defLabel, "-", "-");
       }
       stmt_list {
         if(!CTX->switchSkipCaseStack.empty()){
