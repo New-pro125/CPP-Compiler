@@ -1,4 +1,5 @@
 #include "semantic_analyzer.h"
+#include <unordered_set>
 
 SemanticAnalyzer::SemanticAnalyzer(SymbolTable *st, QuadrupleGenerator *qg, ErrorHandler *eh)
     : symTable(st),
@@ -126,9 +127,13 @@ ExprAttr SemanticAnalyzer::resolveIdentifier(const std::string &symbol_name, int
     if (!sym->isFunction && !sym->isInitialized)
     {
         errorHandler->addSemanticError(line, "Variable '" + symbol_name + "' used before being initialized");
+        result.type = Type::UNKNOWN;
     }
-    result.type = sym->dataType;
-    result.place = symbol_name;
+    else
+    {
+        result.type = sym->dataType;
+    }
+    result.place = sym->irName;
 
     result.isLvalue = !sym->isConst && !sym->isFunction;
     result.isConst = sym->isConst;
@@ -347,11 +352,11 @@ Type SemanticAnalyzer::checkBinaryOper(const ExprAttr &left, const ExprAttr &rig
     // Make local mutable copies for coercion
     ExprAttr l = left;
     ExprAttr r = right;
-
+    std::unordered_set<std::string> int_ops = {"BITWISEAND", "BITWISEOR", "BITWISEXOR", "RSHIFT", "LSHIFT", "MOD", "LSHIFTASSIGN", "RSHIFTASSIGN", "XORASSIGN", "ANDASSIGN", "ORASSIGN", "MODASSIGN"};
+    std::unordered_set<std::string> mathematical_ops = {"PLUSASSIGN", "MINUSASSIGN", "STARASSIGN", "DIVASSIGN", "PLUS", "MINUS", "STAR", "DIV"};
     // TODO: Change the operators into the names used inside the parser
     // bitwise,mod => require integer types
-    if (op == "BITWISEAND" || op == "BITWISEOR" || op == "BITWISEXOR" ||
-        op == "RSHIFT" || op == "LSHIFT" || op == "MOD")
+    if (int_ops.count(op)) // if operator exists then get into here
     {
         if (l.type == Type::STRING || r.type == Type::STRING)
         {
@@ -432,12 +437,12 @@ Type SemanticAnalyzer::checkBinaryOper(const ExprAttr &left, const ExprAttr &rig
         return Type::BOOL;
     }
 
-    if (op == "PLUS" || op == "MINUS" || op == "STAR" || op == "DIV")
+    if (mathematical_ops.count(op))
     {
         // string concatenation
         if (l.type == Type::STRING || r.type == Type::STRING)
         {
-            if (op == "PLUS" && l.type == Type::STRING && r.type == Type::STRING)
+            if ((op == "PLUS" || op == "PLUSASSIGN") && l.type == Type::STRING && r.type == Type::STRING)
             {
                 return Type::STRING;
             }

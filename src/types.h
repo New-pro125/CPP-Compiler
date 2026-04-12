@@ -15,6 +15,7 @@ enum class Type
 struct Symbol
 {
     std::string name;
+    std::string irName;
     Type dataType = Type::UNKNOWN;
     bool isConst = false;
     bool isInitialized = false;

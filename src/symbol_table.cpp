@@ -7,13 +7,40 @@ SymbolTable::SymbolTable()
     currentScopeLevel = 0;
     scopes.push_back(std::unordered_map<std::string, Symbol *>());
 }
-
+std::string SymbolTable::getIRName(const std::string &symbol_name)
+{
+    Symbol *sym = this->lookup(symbol_name);
+    return sym ? sym->irName : symbol_name;
+}
 bool SymbolTable::insert(const std::string &symbol_name, Symbol sym)
 {
     if (scopes.back().find(symbol_name) != scopes.back().end())
         // symbol exists
         return false;
+    sym.name = symbol_name;
     sym.scopeLevel = currentScopeLevel;
+    // Added to handle name mangling for symbols
+    sym.irName = symbol_name;
+
+    bool symbolCollision = false;
+    if (!sym.isFunction)
+    {
+        for (Symbol &oldSym : archive)
+        {
+            if (!oldSym.isFunction && oldSym.name == symbol_name && oldSym.scopeLevel != currentScopeLevel)
+            {
+                symbolCollision = true;
+                if (oldSym.irName == oldSym.name)
+                {
+                    oldSym.irName = oldSym.name + "@" + std::to_string(oldSym.scopeLevel);
+                }
+            }
+        }
+    }
+    if (symbolCollision)
+    {
+        sym.irName = sym.name + "@" + std::to_string(sym.scopeLevel);
+    }
     this->archive.push_back(sym);
 
     scopes.back()[symbol_name] = &this->archive.back();
@@ -63,7 +90,7 @@ void SymbolTable::printSymbolTable()
     for (int i = 0; i < (int)this->archive.size(); i++)
     {
         const Symbol &sym = this->archive[i];
-        std::cout << std::left << std::setw(20) << sym.name << std::setw(10) << typeToString(sym.dataType) << std::setw(8)
+        std::cout << std::left << std::setw(20) << sym.irName << std::setw(10) << typeToString(sym.dataType) << std::setw(8)
                   << sym.scopeLevel << std::setw(8)
                   << (sym.isConst ? "yes" : "no")
                   << std::setw(8) << (sym.isInitialized ? "yes" : "no") << std::setw(8) << (sym.isUsed ? "yes" : "no")

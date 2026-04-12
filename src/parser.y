@@ -140,24 +140,26 @@ declarator
           if (CTX->currDeclConst) {
               SA->checkConstInitialized($1, true, yylineno);
           }
-          // Validate assignment type
-          SA->validateAssignment(*$3, CTX->currDeclType, yylineno);
-          // Coerce if needed
+          bool initOk = SA->validateAssignment(*$3, CTX->currDeclType, yylineno);
           ExprAttr rhs = *$3;
-          SA->coerce(rhs, CTX->currDeclType, yylineno);
+          if (initOk) {
+              initOk = SA->coerce(rhs, CTX->currDeclType, yylineno);
+          }
           free($3);
 
           Symbol sym;
           sym.name = $1;
           sym.dataType = CTX->currDeclType;
           sym.isConst = CTX->currDeclConst;
-          sym.isInitialized = true;
+          sym.isInitialized = initOk;
           sym.declaredLine = yylineno;
           if (!ST->insert($1, sym)) {
               EH->addSemanticError(yylineno,
                   "Redeclaration of variable '" + std::string($1) + "'");
           }
-          QG->emit("ASSIGN", rhs.place, "-", std::string($1));
+          if (initOk) {
+              QG->emit("ASSIGN", rhs.place, "-", ST->getIRName($1));
+          }
           free($1);
       }
     ;
@@ -236,7 +238,7 @@ param_decl
           CTX->currParam.push_back($1);
           CTX->currParamNames.push_back($2);
           CTX->currParamDefaults.push_back($4->place);
-          delete $4;
+          free($4);
           free($2);
       }
     | CONST type_spec IDENTIFIER ASSIGN literal
@@ -244,7 +246,7 @@ param_decl
           CTX->currParam.push_back($2);
           CTX->currParamNames.push_back($3);
           CTX->currParamDefaults.push_back($5->place);
-          delete $5;
+          free( $5);
           free($3);
       }
     ;
@@ -308,7 +310,7 @@ if_stmt
       {
           std::string falseLabel = QG->newLabel();
           QG->emit("JMP_FALSE", $3->place, "-", falseLabel);
-          delete $3;
+          free($3);
           $<sval>$ = strdup(falseLabel.c_str());
       }
       stmt %prec LOWER_THAN_ELSE
@@ -321,7 +323,7 @@ if_stmt
       {
           std::string falseLabel = QG->newLabel();
           QG->emit("JMP_FALSE", $3->place, "-", falseLabel);
-          delete $3;
+          free($3);
           $<sval>$ = strdup(falseLabel.c_str());
       }
       stmt ELSE
@@ -356,7 +358,7 @@ while_stmt
       LPARENTHESIS expr RPARENTHESIS
       {
           QG->emit("JMP_FALSE", $4->place, "-", CTX->breakLabels.back());
-          delete $4;
+          free($4);
       }
       stmt
       {
@@ -399,7 +401,7 @@ do_while_stmt
           std::string startLabel = labels.substr(0, p1);
           std::string endLabel = labels.substr(p2 + 1);
           QG->emit("JMP_TRUE", $7->place, "-", startLabel);
-          delete $7;
+          free($7);
           QG->emit("LABEL", endLabel, "-", "-");
           CTX->breakLabels.pop_back();
           CTX->continueLabels.pop_back();
@@ -436,7 +438,7 @@ for_stmt
           if ($7->place != "") {
               QG->emit("JMP_FALSE", $7->place, "-", endLabel);
           }
-          delete $7;
+          free($7);
           QG->emit("JMP", "-", "-", bodyLabel);
           std::string updateLabel = labels.substr(p2 + 1, p3 - p2 - 1);
           QG->emit("LABEL", updateLabel, "-", "-");
@@ -502,7 +504,7 @@ switch_stmt
           std::string endLabel = QG->newLabel();
           CTX->breakLabels.push_back(endLabel);
           $<sval>$ = strdup(($3->place + "," + endLabel).c_str());
-          delete $3;
+          free($3);
       }
       LBRACE case_list RBRACE
       {
@@ -529,7 +531,7 @@ case_item
           /* Get switch expr from parent - simplified approach */
           std::string temp = QG->newTemp();
           QG->emit("EQ", "switch_expr", $2->place, temp);
-          delete $2;
+          free($2);
           QG->emit("JMP_FALSE", temp, "-", nextCase);
           QG->emit("LABEL", caseLabel, "-", "-");
           $<sval>$ = strdup(nextCase.c_str());
@@ -577,7 +579,7 @@ return_stmt
           ExprAttr val = *$2;
           SA->validateReturn(SA->getCurrentFunctionReturnType(), &val, yylineno);
           QG->emit("RETURN", val.place, "-", "-");
-          delete $2;
+          free($2);
       }
     ;
 
@@ -589,8 +591,8 @@ arg_list_opt
     ;
 
 arg_list
-    : arg_list COMMA expr  { CTX->passedArgs.push_back(*$3); delete $3; }
-    | expr                 { CTX->passedArgs.push_back(*$1); delete $1; }
+    : arg_list COMMA expr  { CTX->passedArgs.push_back(*$3); free($3); }
+    | expr                 { CTX->passedArgs.push_back(*$1); free($1); }
     | error RPARENTHESIS   { yyerrok; yyclearin; }
     ;
 
@@ -604,7 +606,7 @@ assign_expr
       {
           bool isAssignable = SA->checkAssignable($1, yylineno);
           ExprAttr rhs = *$3;
-          delete $3;
+          free($3);
           Symbol *sym = ST->lookup($1);
           bool typeOk = false;
           if (isAssignable && sym) {
@@ -613,10 +615,10 @@ assign_expr
           if (isAssignable && sym && typeOk) {
               SA->coerce(rhs, sym->dataType, yylineno);
               sym->isInitialized = true;
-              QG->emit("ASSIGN", rhs.place, "-", std::string($1));
+              QG->emit("ASSIGN", rhs.place, "-", sym->irName);
           }
           $$ = new ExprAttr();
-          $$->place = std::string($1);
+          $$->place = sym->irName;
           $$->type = (isAssignable && sym && typeOk) ? sym->dataType : Type::UNKNOWN;
           free($1);
       }
@@ -624,7 +626,7 @@ assign_expr
       {
           bool isAssignable = SA->checkAssignable($1, yylineno);
           ExprAttr rhs = *$3;
-          delete $3;
+          free($3);
           Type resultType = Type::UNKNOWN;
           if (isAssignable) {
               ExprAttr lhs = SA->resolveIdentifier($1, yylineno);
@@ -632,11 +634,11 @@ assign_expr
               if (resultType != Type::UNKNOWN) {
                   std::string temp = QG->newTemp();
                   QG->emit("ADD", lhs.place, rhs.place, temp);
-                  QG->emit("ASSIGN", temp, "-", std::string($1));
+                  QG->emit("ASSIGN", temp, "-", lhs.place);
               }
           }
           $$ = new ExprAttr();
-          $$->place = std::string($1);
+          $$->place = ST->getIRName($1);
           $$->type = resultType;
           free($1);
       }
@@ -644,7 +646,7 @@ assign_expr
       {
           bool isAssignable = SA->checkAssignable($1, yylineno);
           ExprAttr rhs = *$3;
-          delete $3;
+          free($3);
           Type resultType = Type::UNKNOWN;
           if (isAssignable) {
               ExprAttr lhs = SA->resolveIdentifier($1, yylineno);
@@ -652,11 +654,11 @@ assign_expr
               if (resultType != Type::UNKNOWN) {
                   std::string temp = QG->newTemp();
                   QG->emit("SUB", lhs.place, rhs.place, temp);
-                  QG->emit("ASSIGN", temp, "-", std::string($1));
+                  QG->emit("ASSIGN", temp, "-", lhs.place);
               }
           }
           $$ = new ExprAttr();
-          $$->place = std::string($1);
+          $$->place = ST->getIRName($1);
           $$->type = resultType;
           free($1);
       }
@@ -664,7 +666,7 @@ assign_expr
       {
           bool isAssignable = SA->checkAssignable($1, yylineno);
           ExprAttr rhs = *$3;
-          delete $3;
+          free($3);
           Type resultType = Type::UNKNOWN;
           if (isAssignable) {
               ExprAttr lhs = SA->resolveIdentifier($1, yylineno);
@@ -672,11 +674,11 @@ assign_expr
               if (resultType != Type::UNKNOWN) {
                   std::string temp = QG->newTemp();
                   QG->emit("MUL", lhs.place, rhs.place, temp);
-                  QG->emit("ASSIGN", temp, "-", std::string($1));
+                  QG->emit("ASSIGN", temp, "-", lhs.place);
               }
           }
           $$ = new ExprAttr();
-          $$->place = std::string($1);
+          $$->place = ST->getIRName($1);
           $$->type = resultType;
           free($1);
       }
@@ -684,7 +686,7 @@ assign_expr
       {
           bool isAssignable = SA->checkAssignable($1, yylineno);
           ExprAttr rhs = *$3;
-          delete $3;
+          free($3);
           Type resultType = Type::UNKNOWN;
           if (isAssignable) {
               ExprAttr lhs = SA->resolveIdentifier($1, yylineno);
@@ -692,11 +694,11 @@ assign_expr
               if (resultType != Type::UNKNOWN) {
                   std::string temp = QG->newTemp();
                   QG->emit("DIV", lhs.place, rhs.place, temp);
-                  QG->emit("ASSIGN", temp, "-", std::string($1));
+                  QG->emit("ASSIGN", temp, "-", lhs.place);
               }
           }
           $$ = new ExprAttr();
-          $$->place = std::string($1);
+          $$->place = ST->getIRName($1);
           $$->type = resultType;
           free($1);
       }
@@ -704,7 +706,7 @@ assign_expr
       {
           bool isAssignable = SA->checkAssignable($1, yylineno);
           ExprAttr rhs = *$3;
-          delete $3;
+          free($3);
           Type resultType = Type::UNKNOWN;
           if (isAssignable) {
               ExprAttr lhs = SA->resolveIdentifier($1, yylineno);
@@ -712,11 +714,11 @@ assign_expr
               if (resultType != Type::UNKNOWN) {
                   std::string temp = QG->newTemp();
                   QG->emit("MOD", lhs.place, rhs.place, temp);
-                  QG->emit("ASSIGN", temp, "-", std::string($1));
+                  QG->emit("ASSIGN", temp, "-", lhs.place);
               }
           }
           $$ = new ExprAttr();
-          $$->place = std::string($1);
+          $$->place = ST->getIRName($1);
           $$->type = resultType;
           free($1);
       }
@@ -724,7 +726,7 @@ assign_expr
       {
           bool isAssignable = SA->checkAssignable($1, yylineno);
           ExprAttr rhs = *$3;
-          delete $3;
+          free($3);
           Type resultType = Type::UNKNOWN;
           if (isAssignable) {
               ExprAttr lhs = SA->resolveIdentifier($1, yylineno);
@@ -732,11 +734,11 @@ assign_expr
               if (resultType != Type::UNKNOWN) {
                   std::string temp = QG->newTemp();
                   QG->emit("SHL", lhs.place, rhs.place, temp);
-                  QG->emit("ASSIGN", temp, "-", std::string($1));
+                  QG->emit("ASSIGN", temp, "-", lhs.place);
               }
           }
           $$ = new ExprAttr();
-          $$->place = std::string($1);
+          $$->place = ST->getIRName($1);
           $$->type = resultType;
           free($1);
       }
@@ -744,7 +746,7 @@ assign_expr
       {
           bool isAssignable = SA->checkAssignable($1, yylineno);
           ExprAttr rhs = *$3;
-          delete $3;
+          free($3);
           Type resultType = Type::UNKNOWN;
           if (isAssignable) {
               ExprAttr lhs = SA->resolveIdentifier($1, yylineno);
@@ -752,11 +754,11 @@ assign_expr
               if (resultType != Type::UNKNOWN) {
                   std::string temp = QG->newTemp();
                   QG->emit("SHR", lhs.place, rhs.place, temp);
-                  QG->emit("ASSIGN", temp, "-", std::string($1));
+                  QG->emit("ASSIGN", temp, "-", lhs.place);
               }
           }
           $$ = new ExprAttr();
-          $$->place = std::string($1);
+          $$->place = ST->getIRName($1);
           $$->type = resultType;
           free($1);
       }
@@ -764,7 +766,7 @@ assign_expr
       {
           bool isAssignable = SA->checkAssignable($1, yylineno);
           ExprAttr rhs = *$3;
-          delete $3;
+          free($3);
           Type resultType = Type::UNKNOWN;
           if (isAssignable) {
               ExprAttr lhs = SA->resolveIdentifier($1, yylineno);
@@ -772,11 +774,11 @@ assign_expr
               if (resultType != Type::UNKNOWN) {
                   std::string temp = QG->newTemp();
                   QG->emit("BXOR", lhs.place, rhs.place, temp);
-                  QG->emit("ASSIGN", temp, "-", std::string($1));
+                  QG->emit("ASSIGN", temp, "-", lhs.place);
               }
           }
           $$ = new ExprAttr();
-          $$->place = std::string($1);
+          $$->place = ST->getIRName($1);
           $$->type = resultType;
           free($1);
       }
@@ -784,7 +786,7 @@ assign_expr
       {
           bool isAssignable = SA->checkAssignable($1, yylineno);
           ExprAttr rhs = *$3;
-          delete $3;
+          free($3);
           Type resultType = Type::UNKNOWN;
           if (isAssignable) {
               ExprAttr lhs = SA->resolveIdentifier($1, yylineno);
@@ -792,11 +794,11 @@ assign_expr
               if (resultType != Type::UNKNOWN) {
                   std::string temp = QG->newTemp();
                   QG->emit("BAND", lhs.place, rhs.place, temp);
-                  QG->emit("ASSIGN", temp, "-", std::string($1));
+                  QG->emit("ASSIGN", temp, "-", lhs.place);
               }
           }
           $$ = new ExprAttr();
-          $$->place = std::string($1);
+          $$->place = ST->getIRName($1);
           $$->type = resultType;
           free($1);
       }
@@ -804,7 +806,7 @@ assign_expr
       {
           bool isAssignable = SA->checkAssignable($1, yylineno);
           ExprAttr rhs = *$3;
-          delete $3;
+          free($3);
           Type resultType = Type::UNKNOWN;
           if (isAssignable) {
               ExprAttr lhs = SA->resolveIdentifier($1, yylineno);
@@ -812,11 +814,11 @@ assign_expr
               if (resultType != Type::UNKNOWN) {
                   std::string temp = QG->newTemp();
                   QG->emit("BOR", lhs.place, rhs.place, temp);
-                  QG->emit("ASSIGN", temp, "-", std::string($1));
+                  QG->emit("ASSIGN", temp, "-", lhs.place);
               }
           }
           $$ = new ExprAttr();
-          $$->place = std::string($1);
+          $$->place = ST->getIRName($1);
           $$->type = resultType;
           free($1);
       }
@@ -826,9 +828,13 @@ logical_or_expr
     : logical_or_expr OR logical_and_expr
       {
           Type t = SA->checkBinaryOper(*$1, *$3, "OR", yylineno);
-          std::string temp = QG->newTemp();
-          QG->emit("OR", $1->place, $3->place, temp);
-          delete $1; delete $3;
+          std::string temp;
+          if (t != Type::UNKNOWN) {
+              temp = QG->newTemp();
+              QG->emit("OR", $1->place, $3->place, temp);
+          }
+          free($1); 
+          free($3);
           $$ = new ExprAttr();
           $$->place = temp;
           $$->type = t;
@@ -840,9 +846,13 @@ logical_and_expr
     : logical_and_expr AND bitwise_or_expr
       {
           Type t = SA->checkBinaryOper(*$1, *$3, "AND", yylineno);
-          std::string temp = QG->newTemp();
-          QG->emit("AND", $1->place, $3->place, temp);
-          delete $1; delete $3;
+          std::string temp;
+          if (t != Type::UNKNOWN) {
+              temp = QG->newTemp();
+              QG->emit("AND", $1->place, $3->place, temp);
+          }
+          free ($1);
+          free ($3);
           $$ = new ExprAttr();
           $$->place = temp;
           $$->type = t;
@@ -854,9 +864,13 @@ bitwise_or_expr
     : bitwise_or_expr BITWISEOR bitwise_xor_expr
       {
           Type t = SA->checkBinaryOper(*$1, *$3, "BITWISEOR", yylineno);
-          std::string temp = QG->newTemp();
-          QG->emit("BOR", $1->place, $3->place, temp);
-          delete $1; delete $3;
+          std::string temp;
+          if (t != Type::UNKNOWN) {
+              temp = QG->newTemp();
+              QG->emit("BOR", $1->place, $3->place, temp);
+          }
+          free($1);
+          free($3);
           $$ = new ExprAttr();
           $$->place = temp;
           $$->type = t;
@@ -868,9 +882,13 @@ bitwise_xor_expr
     : bitwise_xor_expr BITWISEXOR bitwise_and_expr
       {
           Type t = SA->checkBinaryOper(*$1, *$3, "BITWISEXOR", yylineno);
-          std::string temp = QG->newTemp();
-          QG->emit("BXOR", $1->place, $3->place, temp);
-          delete $1; delete $3;
+          std::string temp;
+          if (t != Type::UNKNOWN) {
+              temp = QG->newTemp();
+              QG->emit("BXOR", $1->place, $3->place, temp);
+          }
+          free($1);
+          free($3);
           $$ = new ExprAttr();
           $$->place = temp;
           $$->type = t;
@@ -882,9 +900,13 @@ bitwise_and_expr
     : bitwise_and_expr BITWISEAND equality_expr
       {
           Type t = SA->checkBinaryOper(*$1, *$3, "BITWISEAND", yylineno);
-          std::string temp = QG->newTemp();
-          QG->emit("BAND", $1->place, $3->place, temp);
-          delete $1; delete $3;
+          std::string temp;
+          if (t != Type::UNKNOWN) {
+              temp = QG->newTemp();
+              QG->emit("BAND", $1->place, $3->place, temp);
+          }
+          free($1);
+          free($3);
           $$ = new ExprAttr();
           $$->place = temp;
           $$->type = t;
@@ -896,9 +918,13 @@ equality_expr
     : equality_expr EQ relational_expr
       {
           Type t = SA->checkBinaryOper(*$1, *$3, "EQ", yylineno);
-          std::string temp = QG->newTemp();
-          QG->emit("EQ", $1->place, $3->place, temp);
-          delete $1; delete $3;
+          std::string temp;
+          if (t != Type::UNKNOWN) {
+              temp = QG->newTemp();
+              QG->emit("EQ", $1->place, $3->place, temp);
+          }
+          free($1);
+          free($3);
           $$ = new ExprAttr();
           $$->place = temp;
           $$->type = t;
@@ -906,9 +932,13 @@ equality_expr
     | equality_expr NEQ relational_expr
       {
           Type t = SA->checkBinaryOper(*$1, *$3, "NEQ", yylineno);
-          std::string temp = QG->newTemp();
-          QG->emit("NEQ", $1->place, $3->place, temp);
-          delete $1; delete $3;
+          std::string temp;
+          if (t != Type::UNKNOWN) {
+              temp = QG->newTemp();
+              QG->emit("NEQ", $1->place, $3->place, temp);
+          }
+          free($1);
+          free($3);
           $$ = new ExprAttr();
           $$->place = temp;
           $$->type = t;
@@ -920,9 +950,13 @@ relational_expr
     : relational_expr LT shift_expr
       {
           Type t = SA->checkBinaryOper(*$1, *$3, "LT", yylineno);
-          std::string temp = QG->newTemp();
-          QG->emit("LT", $1->place, $3->place, temp);
-          delete $1; delete $3;
+          std::string temp;
+          if (t != Type::UNKNOWN) {
+              temp = QG->newTemp();
+              QG->emit("LT", $1->place, $3->place, temp);
+          }
+          free($1);
+          free($3);
           $$ = new ExprAttr();
           $$->place = temp;
           $$->type = t;
@@ -930,9 +964,13 @@ relational_expr
     | relational_expr GT shift_expr
       {
           Type t = SA->checkBinaryOper(*$1, *$3, "GT", yylineno);
-          std::string temp = QG->newTemp();
-          QG->emit("GT", $1->place, $3->place, temp);
-          delete $1; delete $3;
+          std::string temp;
+          if (t != Type::UNKNOWN) {
+              temp = QG->newTemp();
+              QG->emit("GT", $1->place, $3->place, temp);
+          }
+          free ($1);
+          free ($3);
           $$ = new ExprAttr();
           $$->place = temp;
           $$->type = t;
@@ -940,9 +978,13 @@ relational_expr
     | relational_expr LEQ shift_expr
       {
           Type t = SA->checkBinaryOper(*$1, *$3, "LEQ", yylineno);
-          std::string temp = QG->newTemp();
-          QG->emit("LEQ", $1->place, $3->place, temp);
-          delete $1; delete $3;
+          std::string temp;
+          if (t != Type::UNKNOWN) {
+              temp = QG->newTemp();
+              QG->emit("LEQ", $1->place, $3->place, temp);
+          }
+          free($1);
+          free($3);
           $$ = new ExprAttr();
           $$->place = temp;
           $$->type = t;
@@ -950,9 +992,13 @@ relational_expr
     | relational_expr GEQ shift_expr
       {
           Type t = SA->checkBinaryOper(*$1, *$3, "GEQ", yylineno);
-          std::string temp = QG->newTemp();
-          QG->emit("GEQ", $1->place, $3->place, temp);
-          delete $1; delete $3;
+          std::string temp;
+          if (t != Type::UNKNOWN) {
+              temp = QG->newTemp();
+              QG->emit("GEQ", $1->place, $3->place, temp);
+          }
+          free($1);
+          free($3);
           $$ = new ExprAttr();
           $$->place = temp;
           $$->type = t;
@@ -964,9 +1010,13 @@ shift_expr
     : shift_expr LSHIFT additive_expr
       {
           Type t = SA->checkBinaryOper(*$1, *$3, "LSHIFT", yylineno);
-          std::string temp = QG->newTemp();
-          QG->emit("SHL", $1->place, $3->place, temp);
-          delete $1; delete $3;
+          std::string temp;
+          if (t != Type::UNKNOWN) {
+              temp = QG->newTemp();
+              QG->emit("SHL", $1->place, $3->place, temp);
+          }
+          free($1); 
+          free($3);
           $$ = new ExprAttr();
           $$->place = temp;
           $$->type = t;
@@ -974,9 +1024,13 @@ shift_expr
     | shift_expr RSHIFT additive_expr
       {
           Type t = SA->checkBinaryOper(*$1, *$3, "RSHIFT", yylineno);
-          std::string temp = QG->newTemp();
-          QG->emit("SHR", $1->place, $3->place, temp);
-          delete $1; delete $3;
+          std::string temp;
+          if (t != Type::UNKNOWN) {
+              temp = QG->newTemp();
+              QG->emit("SHR", $1->place, $3->place, temp);
+          }
+          free ($1); 
+          free ($3);
           $$ = new ExprAttr();
           $$->place = temp;
           $$->type = t;
@@ -988,9 +1042,13 @@ additive_expr
     : additive_expr PLUS multiplicative_expr
       {
           Type t = SA->checkBinaryOper(*$1, *$3, "PLUS", yylineno);
-          std::string temp = QG->newTemp();
-          QG->emit("ADD", $1->place, $3->place, temp);
-          delete $1; delete $3;
+          std::string temp;
+          if (t != Type::UNKNOWN) {
+              temp = QG->newTemp();
+              QG->emit("ADD", $1->place, $3->place, temp);
+          }
+          free($1); 
+          free($3);
           $$ = new ExprAttr();
           $$->place = temp;
           $$->type = t;
@@ -998,9 +1056,13 @@ additive_expr
     | additive_expr MINUS multiplicative_expr
       {
           Type t = SA->checkBinaryOper(*$1, *$3, "MINUS", yylineno);
-          std::string temp = QG->newTemp();
-          QG->emit("SUB", $1->place, $3->place, temp);
-          delete $1; delete $3;
+          std::string temp;
+          if (t != Type::UNKNOWN) {
+              temp = QG->newTemp();
+              QG->emit("SUB", $1->place, $3->place, temp);
+          }
+          free($1); 
+          free($3);
           $$ = new ExprAttr();
           $$->place = temp;
           $$->type = t;
@@ -1012,9 +1074,13 @@ multiplicative_expr
     : multiplicative_expr STAR unary_expr
       {
           Type t = SA->checkBinaryOper(*$1, *$3, "STAR", yylineno);
-          std::string temp = QG->newTemp();
-          QG->emit("MUL", $1->place, $3->place, temp);
-          delete $1; delete $3;
+          std::string temp;
+          if (t != Type::UNKNOWN) {
+              temp = QG->newTemp();
+              QG->emit("MUL", $1->place, $3->place, temp);
+          }
+          free($1); 
+          free($3);
           $$ = new ExprAttr();
           $$->place = temp;
           $$->type = t;
@@ -1022,9 +1088,13 @@ multiplicative_expr
     | multiplicative_expr DIV unary_expr
       {
           Type t = SA->checkBinaryOper(*$1, *$3, "DIV", yylineno);
-          std::string temp = QG->newTemp();
-          QG->emit("DIV", $1->place, $3->place, temp);
-          delete $1; delete $3;
+          std::string temp;
+          if (t != Type::UNKNOWN) {
+              temp = QG->newTemp();
+              QG->emit("DIV", $1->place, $3->place, temp);
+          }
+          free($1); 
+          free($3);
           $$ = new ExprAttr();
           $$->place = temp;
           $$->type = t;
@@ -1032,9 +1102,13 @@ multiplicative_expr
     | multiplicative_expr MOD unary_expr
       {
           Type t = SA->checkBinaryOper(*$1, *$3, "MOD", yylineno);
-          std::string temp = QG->newTemp();
-          QG->emit("MOD", $1->place, $3->place, temp);
-          delete $1; delete $3;
+          std::string temp;
+          if (t != Type::UNKNOWN) {
+              temp = QG->newTemp();
+              QG->emit("MOD", $1->place, $3->place, temp);
+          }
+          free($1); 
+          free($3);
           $$ = new ExprAttr();
           $$->place = temp;
           $$->type = t;
@@ -1078,22 +1152,25 @@ unary_expr
       {
           std::string temp = QG->newTemp();
           QG->emit("NOT", $2->place, "-", temp);
-          delete $2;
+          free($2);
           $$ = new ExprAttr();
           $$->place = temp;
           $$->type = Type::BOOL;
       }
     | BITWISENOT unary_expr
       {
-          if (SA->checkBinaryOper(*$2, *$2, "BITWISENOT", yylineno) == Type::UNKNOWN) {
-              /* reuse integer check */// TODO: Look here at this action
-          }
-          std::string temp = QG->newTemp();
-          QG->emit("BNOT", $2->place, "-", temp);
-          delete $2;
+          Type t = SA->checkBinaryOper(*$2, *$2, "BITWISENOT", yylineno);
           $$ = new ExprAttr();
-          $$->place = temp;
-          $$->type = Type::INT;
+          if (t != Type::UNKNOWN) {
+              std::string temp = QG->newTemp();
+              QG->emit("BNOT", $2->place, "-", temp);
+              $$->place = temp;
+              $$->type = Type::INT;
+          } else {
+              $$->place = $2->place;
+              $$->type = Type::UNKNOWN;
+          }
+          free($2);
       }
     | MINUS unary_expr %prec UMINUS
       {
@@ -1102,7 +1179,7 @@ unary_expr
           $$ = new ExprAttr();
           $$->place = temp;
           $$->type = $2->type;
-          delete $2;
+          free($2);
       }
     ;
 

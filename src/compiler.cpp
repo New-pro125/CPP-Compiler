@@ -36,7 +36,7 @@ bool Compiler::compile(const std::string &sourceCode)
     std::vector<Symbol> unused = symTable.getUnusedSymbolsInCurrentScope();
     for (const auto &sym : unused)
         errorHandler.addWarning(sym.declaredLine,
-                                "Variable '" + sym.name + "' declared but never used");
+                                "Variable '" + sym.irName + "' declared but never used");
     parserContext = nullptr;
     return parseResult == 0 && !this->errorHandler.hasErrors();
 }
