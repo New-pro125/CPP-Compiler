@@ -496,3 +496,66 @@ bool SemanticAnalyzer::validateAssignment(ExprAttr rhs, Type lhsType, int line)
                                    "Incompatible types in assignment: '" + typeToString(rhs.type) + "' to '" + typeToString(lhsType) + "'");
     return false;
 }
+void SemanticAnalyzer::beginSwitchCaseTracking()
+{
+    switchCaseLabel.emplace_back();
+    switchHasDefault.push_back(false);
+}
+void SemanticAnalyzer::endSwitchCaseTracking()
+{
+    if (!switchCaseLabel.empty())
+    {
+        switchCaseLabel.pop_back();
+    }
+    if (!switchHasDefault.empty())
+    {
+        switchHasDefault.pop_back();
+    }
+}
+bool SemanticAnalyzer::validateCaseLabel(const ExprAttr &label, int line)
+{
+    if (switchCaseLabel.empty())
+    {
+        return true;
+    }
+    std::string caseKey = typeToString(label.type) + ":" + label.place;
+    auto &seen = switchCaseLabel.back();
+    if (seen.find(caseKey) != seen.end())
+    {
+        this->errorHandler->addSemanticError(
+            line,
+            "Duplicate case label '" + label.place + "' in same switch");
+        return false;
+    }
+    seen.insert(caseKey);
+    return true;
+}
+bool SemanticAnalyzer::validateDefaultLabel(int line)
+{
+    if (switchCaseLabel.empty())
+    {
+        return true;
+    }
+
+    if (switchHasDefault.back())
+    {
+        this->errorHandler->addSemanticError(
+            line,
+            "Duplicate default in the same switch");
+        return false;
+    }
+    switchHasDefault.back() = true;
+    return true;
+}
+void SemanticAnalyzer::enterSwitchContext()
+{
+    this->enterSwitch();
+    this->symTable->addScope();
+    this->beginSwitchCaseTracking();
+}
+void SemanticAnalyzer::leaveSwitchContext()
+{
+    this->exitSwitch();
+    this->symTable->LeaveScope();
+    this->endSwitchCaseTracking();
+}

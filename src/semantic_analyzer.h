@@ -2,6 +2,7 @@
 #define SEMANTIC_ANALYZER_H
 #include <string>
 #include <vector>
+#include <unordered_set>
 #include "types.h"
 #include "symbol_table.h"
 #include "quadruple_generator.h"
@@ -11,10 +12,11 @@ class SemanticAnalyzer
 {
 private:
     SymbolTable *symTable;
-
     QuadrupleGenerator *quadGen;
-
     ErrorHandler *errorHandler;
+    std::vector<std::unordered_set<std::string>> switchCaseLabel;
+    std::vector<bool> switchHasDefault;
+
     int typeRank(Type t) const;
     Type promoteType(Type a, Type b) const;
 
@@ -41,10 +43,16 @@ public:
     bool checkConstInitialized(const std::string &name, bool hasInitializer, int line);
     bool validateBreak(int line);
     bool validateContinue(int line);
+    void enterSwitchContext();
+    void leaveSwitchContext();
     void enterLoop();
     void exitLoop();
     void enterSwitch();
     void exitSwitch();
+    void beginSwitchCaseTracking();
+    void endSwitchCaseTracking();
+    bool validateCaseLabel(const ExprAttr &label, int line);
+    bool validateDefaultLabel(int line);
     void setCurrentFunction(const std::string &name, Type returnType);
     void clearCurrentFunction();
     Type getCurrentFunctionReturnType() const;

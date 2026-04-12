@@ -3,7 +3,17 @@
 #include <iomanip>
 void QuadrupleGenerator::emit(const std::string &op, const std::string &arg1, const std::string &arg2, const std::string result)
 {
+    if (this->suppressionDepth > 0)
+        return;
     this->quads.push_back(Quadruple{op, arg1, arg2, result});
+}
+void QuadrupleGenerator::beginSuppression()
+{
+    this->suppressionDepth++;
+}
+void QuadrupleGenerator::endSuppression()
+{
+    this->suppressionDepth = std::min(0, this->suppressionDepth - 1);
 }
 int QuadrupleGenerator::nextQuad() const
 {

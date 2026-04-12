@@ -500,8 +500,7 @@ expr_opt
 switch_stmt
     : SWITCH LPARENTHESIS expr RPARENTHESIS
       {
-          ST->addScope();
-          SA->enterSwitch();
+          SA->enterSwitchContext();
           std::string endLabel = QG->newLabel();
           CTX->breakLabels.push_back(endLabel);
           CTX->switchExprStack.push_back($3->place);
@@ -518,8 +517,7 @@ switch_stmt
           if(!CTX->switchExprStack.empty()){
             CTX->switchExprStack.pop_back();
           }
-          ST->LeaveScope();
-          SA->exitSwitch();
+          SA->leaveSwitchContext();
           free($<sval>5);
       }
     ;
@@ -533,6 +531,9 @@ case_item
     : CASE literal COLON
       {
           std::string caseLabel = QG->newLabel();
+          bool skipCase = !SA->validateCaseLabel(*$2,yylineno);
+          CTX->switchSkipCaseStack.push_back(skipCase);
+          if(skipCase) QG->beginSuppression();
           std::string nextCase = QG->newLabel();
           
           std::string temp = QG->newTemp();
@@ -546,15 +547,37 @@ case_item
       }
       stmt_list
       {
-          QG->emit("LABEL", std::string($<sval>4), "-", "-");
+          bool skipCase = false;
+          if(!CTX->switchSkipCaseStack.empty()){
+            skipCase = CTX->switchSkipCaseStack.back();
+            CTX->switchSkipCaseStack.pop_back();
+            if(skipCase){
+                QG->endSuppression();
+            } else {
+                QG->emit("LABEL", std::string($<sval>4), "-", "-");
+            }
+          }
           free($<sval>4);
       }
     | DEFAULT COLON
       {
+          bool skipDefault = !SA->validateDefaultLabel(yylineno);
+          CTX->switchSkipCaseStack.push_back(skipDefault);
+          if(skipDefault){
+                QG->beginSuppression();
+          }
           std::string defLabel = QG->newLabel();
           QG->emit("LABEL", defLabel, "-", "-");
       }
-      stmt_list
+      stmt_list {
+        if(!CTX->switchSkipCaseStack.empty()){
+            bool skipDefault = CTX->switchSkipCaseStack.back();
+            CTX->switchSkipCaseStack.pop_back();
+            if(skipDefault){
+                QG->endSuppression();
+            }
+        }
+      }
     ;
 
 
