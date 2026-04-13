@@ -352,7 +352,7 @@ Type SemanticAnalyzer::checkBinaryOper(const ExprAttr &left, const ExprAttr &rig
     // Make local mutable copies for coercion
     ExprAttr l = left;
     ExprAttr r = right;
-    std::unordered_set<std::string> int_ops = {"BITWISEAND", "BITWISEOR", "BITWISEXOR", "RSHIFT", "LSHIFT", "MOD", "LSHIFTASSIGN", "RSHIFTASSIGN", "XORASSIGN", "ANDASSIGN", "ORASSIGN", "MODASSIGN"};
+    std::unordered_set<std::string> int_ops = {"BITWISEAND", "BITWISEOR", "BITWISEXOR", "RSHIFT", "LSHIFT", "MOD", "LSHIFTASSIGN", "RSHIFTASSIGN", "XORASSIGN", "ANDASSIGN", "ORASSIGN", "MODASSIGN", "BITWISENOT"};
     std::unordered_set<std::string> mathematical_ops = {"PLUSASSIGN", "MINUSASSIGN", "STARASSIGN", "DIVASSIGN", "PLUS", "MINUS", "STAR", "DIV"};
     // TODO: Change the operators into the names used inside the parser
     // bitwise,mod => require integer types
