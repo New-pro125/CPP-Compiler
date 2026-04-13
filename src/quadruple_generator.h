@@ -23,6 +23,7 @@ public:
     void beginSuppression();
     void endSuppression();
     std::vector<int> merge(const std::vector<int> &left, const std::vector<int> &right) const;
+    void replaceNames(const std::vector<std::pair<std::string, std::string>> &renameEvents);
     const std::vector<Quadruple> &getQuadraples() const;
     void print() const;
 };

@@ -32,6 +32,8 @@ bool Compiler::compile(const std::string &sourceCode)
     const int parseResult = yyparse();
     yy_delete_buffer(buffer);
 
+    quadGen.replaceNames(symTable.getRenameEvents());
+
     // check unused symbols and give warnings
     std::vector<Symbol> unused = symTable.getUnusedSymbolsInCurrentScope();
     for (const auto &sym : unused)

@@ -22,29 +22,40 @@ bool SymbolTable::insert(const std::string &symbol_name, Symbol sym)
     // Added to handle name mangling for symbols
     sym.irName = symbol_name;
 
-    bool symbolCollision = false;
     if (!sym.isFunction)
     {
-        for (Symbol &oldSym : archive)
+        if (symbolVersions.find(symbol_name) == symbolVersions.end())
         {
-            if (!oldSym.isFunction && oldSym.name == symbol_name && oldSym.scopeLevel != currentScopeLevel)
+            symbolVersions[symbol_name] = 0;
+        }
+        else
+        {
+            if (symbolVersions[symbol_name] == 0)
             {
-                symbolCollision = true;
-                if (oldSym.irName == oldSym.name)
+                // Retroactively rename the original x to x@0 in the archive
+                for (Symbol &oldSym : archive)
                 {
-                    oldSym.irName = oldSym.name + "@" + std::to_string(oldSym.scopeLevel);
+                    if (!oldSym.isFunction && oldSym.name == symbol_name && oldSym.irName == oldSym.name)
+                    {
+                        oldSym.irName = oldSym.name + "@0";
+                        renameEvents.push_back({oldSym.name, oldSym.irName});
+                    }
                 }
             }
+            symbolVersions[symbol_name]++;
+            sym.irName = sym.name + "@" + std::to_string(symbolVersions[symbol_name]);
         }
     }
-    if (symbolCollision)
-    {
-        sym.irName = sym.name + "@" + std::to_string(sym.scopeLevel);
-    }
+
     this->archive.push_back(sym);
 
     scopes.back()[symbol_name] = &this->archive.back();
     return true;
+}
+
+const std::vector<std::pair<std::string, std::string>> &SymbolTable::getRenameEvents() const
+{
+    return renameEvents;
 }
 
 std::vector<Symbol> SymbolTable::getUnusedSymbolsInCurrentScope()

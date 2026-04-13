@@ -46,6 +46,21 @@ std::vector<int> QuadrupleGenerator::merge(const std::vector<int> &left, const s
     out.insert(out.end(), right.begin(), right.end());
     return out;
 }
+void QuadrupleGenerator::replaceNames(const std::vector<std::pair<std::string, std::string>> &renameEvents)
+{
+    for (Quadruple &q : quads)
+    {
+        for (const auto &event : renameEvents)
+        {
+            if (q.arg1 == event.first)
+                q.arg1 = event.second;
+            if (q.arg2 == event.first)
+                q.arg2 = event.second;
+            if (q.result == event.first)
+                q.result = event.second;
+        }
+    }
+}
 const std::vector<Quadruple> &QuadrupleGenerator::getQuadraples() const
 {
     return quads;

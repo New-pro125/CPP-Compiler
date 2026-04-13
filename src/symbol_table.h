@@ -13,6 +13,8 @@ private:
     std::vector<std::unordered_map<std::string, Symbol *>> scopes;
     std::deque<Symbol> archive;
     int currentScopeLevel;
+    std::unordered_map<std::string, int> symbolVersions;
+    std::vector<std::pair<std::string, std::string>> renameEvents;
 
 public:
     SymbolTable();
@@ -25,6 +27,7 @@ public:
     void printSymbolTable();
     std::string getIRName(const std::string &symbol_name);
     int getCurrentScopeLevel() const;
+    const std::vector<std::pair<std::string, std::string>> &getRenameEvents() const;
 };
 
 #endif

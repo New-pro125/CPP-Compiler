@@ -287,7 +287,7 @@ compound_stmt
           std::vector<Symbol> unused = ST->getUnusedSymbolsInCurrentScope();
           for (const auto &s : unused)
               EH->addWarning(s.declaredLine,
-                  "Variable '" + s.name + "' declared but never used");
+                  "Variable '" + s.irName + "' declared but never used");
           ST->LeaveScope();
       }
     ;
@@ -299,7 +299,7 @@ compound_stmt_func
           std::vector<Symbol> unused = ST->getUnusedSymbolsInCurrentScope();
           for (const auto &s : unused)
               EH->addWarning(s.declaredLine,
-                  "Variable '" + s.name + "' declared but never used");
+                  "Variable '" + s.irName + "' declared but never used");
           ST->LeaveScope();
       }
     ;
