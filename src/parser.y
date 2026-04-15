@@ -1,9 +1,11 @@
 %{
 #include <cstdio>
+#include <cstring>
 #include <string>
 #include <vector>
 #include "types.h"
 #include "parser_context.h"
+#include "parser_action_helpers.h"
 
 int yylex();
 void yyerror(const char* s);
@@ -18,7 +20,6 @@ extern int yylineno;
 %}
 
 %define parse.error verbose
-%glr-parser
 
 %code requires {
     #include "types.h"
@@ -57,6 +58,7 @@ extern int yylineno;
 %type <exprval> additive_expr multiplicative_expr unary_expr
 %type <exprval> postfix_expr primary_expr literal
 %type <exprval> expr_opt
+%type <sval> if_condition_prefix
 
 %left COMMA
 %right ASSIGN PLUSASSIGN MINUSASSIGN STARASSIGN DIVASSIGN LSHIFTASSIGN RSHIFTASSIGN XORASSIGN ANDASSIGN ORASSIGN MODASSIGN
@@ -94,19 +96,17 @@ decl
 
 
 type_spec
-    : INT       { $$ = Type::INT; }
-    | FLOAT     { $$ = Type::FLOAT; }
-    | CHAR      { $$ = Type::CHAR; }
-    | BOOL      { $$ = Type::BOOL; }
-    | VOID      { $$ = Type::VOID; }
-    | STRING    { $$ = Type::STRING; }
+    : INT       { $$ = Type::INT; CTX->currDeclType = $$; CTX->currDeclConst = false; }
+    | FLOAT     { $$ = Type::FLOAT; CTX->currDeclType = $$; CTX->currDeclConst = false; }
+    | CHAR      { $$ = Type::CHAR; CTX->currDeclType = $$; CTX->currDeclConst = false; }
+    | BOOL      { $$ = Type::BOOL; CTX->currDeclType = $$; CTX->currDeclConst = false; }
+    | VOID      { $$ = Type::VOID; CTX->currDeclType = $$; CTX->currDeclConst = false; }
+    | STRING    { $$ = Type::STRING; CTX->currDeclType = $$; CTX->currDeclConst = false; }
     ;
 
 
 var_decl
-    : type_spec
-      { CTX->currDeclType = $1; CTX->currDeclConst = false; }
-      declarator_list SEMICOLON
+        : type_spec declarator_list SEMICOLON
     | CONST type_spec
       { CTX->currDeclType = $2; CTX->currDeclConst = true; }
       declarator_list SEMICOLON
@@ -120,46 +120,12 @@ declarator_list
 declarator
     : IDENTIFIER
       {
-          if (CTX->currDeclConst) {
-              SA->checkConstInitialized($1, false, yylineno);
-          }
-          Symbol sym;
-          sym.name = $1;
-          sym.dataType = CTX->currDeclType;
-          sym.isConst = CTX->currDeclConst;
-          sym.isInitialized = false;
-          sym.declaredLine = yylineno;
-          if (!ST->insert($1, sym)) {
-              EH->addSemanticError(yylineno,
-                  "Redeclaration of variable '" + std::string($1) + "'");
-          }
+      handleSimpleDeclarator(CTX, $1, yylineno);
           free($1);
       }
     | IDENTIFIER ASSIGN expr
       {
-          if (CTX->currDeclConst) {
-              SA->checkConstInitialized($1, true, yylineno);
-          }
-          bool initOk = SA->validateAssignment(*$3, CTX->currDeclType, yylineno);
-          ExprAttr rhs = *$3;
-          if (initOk) {
-              initOk = SA->coerce(rhs, CTX->currDeclType, yylineno);
-          }
-          free($3);
-
-          Symbol sym;
-          sym.name = $1;
-          sym.dataType = CTX->currDeclType;
-          sym.isConst = CTX->currDeclConst;
-          sym.isInitialized = initOk;
-          sym.declaredLine = yylineno;
-          if (!ST->insert($1, sym)) {
-              EH->addSemanticError(yylineno,
-                  "Redeclaration of variable '" + std::string($1) + "'");
-          }
-          if (initOk) {
-              QG->emit("ASSIGN", rhs.place, "-", ST->getIRName($1));
-          }
+      handleInitializedDeclarator(CTX, $1, $3, yylineno);
           free($1);
       }
     ;
@@ -167,43 +133,15 @@ declarator
 func_decl
     : type_spec IDENTIFIER LPARENTHESIS
       {
-          CTX->currParam.clear();
-          CTX->currParamNames.clear();
-          CTX->currParamDefaults.clear();
+      resetFunctionParamContext(CTX);
       }
       param_list_opt RPARENTHESIS
       {
-          Symbol sym;
-          sym.name = $2;
-          sym.dataType = $1;
-          sym.returnType = $1;
-          sym.isFunction = true;
-          sym.paramTypes = CTX->currParam;
-          sym.paramNames = CTX->currParamNames;
-          sym.defaultValues = CTX->currParamDefaults;
-          sym.declaredLine = yylineno;
-          sym.isInitialized = true;
-          if (!ST->insert($2, sym)) {
-              EH->addSemanticError(yylineno,
-                  "Redeclaration of function '" + std::string($2) + "'");
-          }
-          SA->setCurrentFunction($2, $1);
-          QG->emit("FUNC_BEGIN", $2, "-", "-");
-          ST->addScope();
-
-          for (size_t i = 0; i < CTX->currParam.size(); i++) {
-              Symbol paramSym;
-              paramSym.name = CTX->currParamNames[i];
-              paramSym.dataType = CTX->currParam[i];
-              paramSym.isInitialized = true;
-              paramSym.declaredLine = yylineno;
-              ST->insert(CTX->currParamNames[i], paramSym);
-          }
+      beginFunctionDefinition(CTX, $2, $1, yylineno);
       }
       compound_stmt_func
       {
-          QG->emit("FUNC_END", $2, "-", "-");
-          SA->clearCurrentFunction();
+      endFunctionDefinition(CTX, $2);
           free($2);
       }
     ;
@@ -221,32 +159,24 @@ param_list
 param_decl
     : type_spec IDENTIFIER
       {
-          CTX->currParam.push_back($1);
-          CTX->currParamNames.push_back($2);
-          CTX->currParamDefaults.push_back("");
+          addFunctionParam(CTX, $1, $2, "");
           free($2);
       }
     | CONST type_spec IDENTIFIER
       {
-          CTX->currParam.push_back($2);
-          CTX->currParamNames.push_back($3);
-          CTX->currParamDefaults.push_back("");
+          addFunctionParam(CTX, $2, $3, "");
           free($3);
       }
     | type_spec IDENTIFIER ASSIGN literal
       {
-          CTX->currParam.push_back($1);
-          CTX->currParamNames.push_back($2);
-          CTX->currParamDefaults.push_back($4->place);
-          free($4);
+          addFunctionParam(CTX, $1, $2, $4->place);
+          delete $4;
           free($2);
       }
     | CONST type_spec IDENTIFIER ASSIGN literal
       {
-          CTX->currParam.push_back($2);
-          CTX->currParamNames.push_back($3);
-          CTX->currParamDefaults.push_back($5->place);
-          free( $5);
+          addFunctionParam(CTX, $2, $3, $5->place);
+          delete $5;
           free($3);
       }
     ;
@@ -284,11 +214,7 @@ expr_stmt
 compound_stmt
     : LBRACE { ST->addScope(); } stmt_list RBRACE
       {
-          std::vector<Symbol> unused = ST->getUnusedSymbolsInCurrentScope();
-          for (const auto &s : unused)
-              EH->addWarning(s.declaredLine,
-                  "Variable '" + s.irName + "' declared but never used");
-          ST->LeaveScope();
+      leaveScopeWithUnusedWarnings(CTX);
       }
     ;
 
@@ -296,50 +222,34 @@ compound_stmt
 compound_stmt_func
     : LBRACE stmt_list RBRACE
       {
-          std::vector<Symbol> unused = ST->getUnusedSymbolsInCurrentScope();
-          for (const auto &s : unused)
-              EH->addWarning(s.declaredLine,
-                  "Variable '" + s.irName + "' declared but never used");
-          ST->LeaveScope();
+      leaveScopeWithUnusedWarnings(CTX);
+      }
+    ;
+
+
+if_condition_prefix
+    : IF LPARENTHESIS expr RPARENTHESIS
+      {
+          $$ = beginIfCondition(CTX, $3);
       }
     ;
 
 
 if_stmt
-    : IF LPARENTHESIS expr RPARENTHESIS
+    : if_condition_prefix stmt %prec LOWER_THAN_ELSE
       {
-          std::string falseLabel = QG->newLabel();
-          QG->emit("JMP_FALSE", $3->place, "-", falseLabel);
-          free($3);
-          $<sval>$ = strdup(falseLabel.c_str());
+          endIfWithoutElse(CTX, $1);
+          free($1);
       }
-      stmt %prec LOWER_THAN_ELSE
+    | if_condition_prefix stmt ELSE
       {
-          std::string label($<sval>5);
-          QG->emit("LABEL", label, "-", "-");
-          free($<sval>5);
-      }
-    | IF LPARENTHESIS expr RPARENTHESIS
-      {
-          std::string falseLabel = QG->newLabel();
-          QG->emit("JMP_FALSE", $3->place, "-", falseLabel);
-          free($3);
-          $<sval>$ = strdup(falseLabel.c_str());
-      }
-      stmt ELSE
-      {
-          std::string endLabel = QG->newLabel();
-          QG->emit("JMP", "-", "-", endLabel);
-          std::string falseLabel($<sval>5);
-          QG->emit("LABEL", falseLabel, "-", "-");
-          free($<sval>5);
-          $<sval>$ = strdup(endLabel.c_str());
+          $<sval>$ = beginElseBranch(CTX, $1);
+          free($1);
       }
       stmt
       {
-          std::string endLabel($<sval>8);
-          QG->emit("LABEL", endLabel, "-", "-");
-          free($<sval>8);
+          endIfWithElse(CTX, $<sval>4);
+          free($<sval>4);
       }
     ;
 
@@ -347,27 +257,15 @@ if_stmt
 while_stmt
     : WHILE
       {
-          std::string startLabel = QG->newLabel();
-          std::string endLabel = QG->newLabel();
-          QG->emit("LABEL", startLabel, "-", "-");
-          CTX->continueLabels.push_back(startLabel);
-          CTX->breakLabels.push_back(endLabel);
-          SA->enterLoop();
-          $<sval>$ = strdup(startLabel.c_str());
+      $<sval>$ = beginWhileLoop(CTX);
       }
       LPARENTHESIS expr RPARENTHESIS
       {
-          QG->emit("JMP_FALSE", $4->place, "-", CTX->breakLabels.back());
-          free($4);
+      emitLoopConditionFalseJump(CTX, $4);
       }
       stmt
       {
-          std::string startLabel($<sval>2);
-          QG->emit("JMP", "-", "-", startLabel);
-          QG->emit("LABEL", CTX->breakLabels.back(), "-", "-");
-          CTX->breakLabels.pop_back();
-          CTX->continueLabels.pop_back();
-          SA->exitLoop();
+      endWhileLoop(CTX, $<sval>2);
           free($<sval>2);
       }
     ;
@@ -376,36 +274,15 @@ while_stmt
 do_while_stmt
     : DO
       {
-          std::string startLabel = QG->newLabel();
-          std::string endLabel = QG->newLabel();
-          std::string condLabel = QG->newLabel();
-          QG->emit("LABEL", startLabel, "-", "-");
-          CTX->continueLabels.push_back(condLabel);
-          CTX->breakLabels.push_back(endLabel);
-          SA->enterLoop();
-          $<sval>$ = strdup((startLabel + "," + condLabel + "," + endLabel).c_str());
+      $<sval>$ = beginDoWhileLoop(CTX);
       }
       stmt WHILE LPARENTHESIS
       {
-          std::string labels($<sval>2);
-          size_t p1 = labels.find(',');
-          size_t p2 = labels.find(',', p1 + 1);
-          std::string condLabel = labels.substr(p1 + 1, p2 - p1 - 1);
-          QG->emit("LABEL", condLabel, "-", "-");
+      emitDoWhileConditionLabel(CTX, $<sval>2);
       }
       expr RPARENTHESIS SEMICOLON
       {
-          std::string labels($<sval>2);
-          size_t p1 = labels.find(',');
-          size_t p2 = labels.find(',', p1 + 1);
-          std::string startLabel = labels.substr(0, p1);
-          std::string endLabel = labels.substr(p2 + 1);
-          QG->emit("JMP_TRUE", $7->place, "-", startLabel);
-          free($7);
-          QG->emit("LABEL", endLabel, "-", "-");
-          CTX->breakLabels.pop_back();
-          CTX->continueLabels.pop_back();
-          SA->exitLoop();
+      endDoWhileLoop(CTX, $<sval>2, $7);
           free($<sval>2);
       }
     ;
@@ -416,57 +293,19 @@ for_stmt
       { ST->addScope(); }
       for_init SEMICOLON
       {
-          std::string condLabel = QG->newLabel();
-          std::string bodyLabel = QG->newLabel();
-          std::string updateLabel = QG->newLabel();
-          std::string endLabel = QG->newLabel();
-          QG->emit("LABEL", condLabel, "-", "-");
-          CTX->continueLabels.push_back(updateLabel);
-          CTX->breakLabels.push_back(endLabel);
-          SA->enterLoop();
-          $<sval>$ = strdup((condLabel + "," + bodyLabel + "," +
-                             updateLabel + "," + endLabel).c_str());
+      $<sval>$ = beginForLoop(CTX);
       }
       expr_opt SEMICOLON
       {
-          std::string labels($<sval>6);
-          size_t p1 = labels.find(',');
-          size_t p2 = labels.find(',', p1 + 1);
-          size_t p3 = labels.find(',', p2 + 1);
-          std::string bodyLabel = labels.substr(p1 + 1, p2 - p1 - 1);
-          std::string endLabel = labels.substr(p3 + 1);
-          if ($7->place != "") {
-              QG->emit("JMP_FALSE", $7->place, "-", endLabel);
-          }
-          free($7);
-          QG->emit("JMP", "-", "-", bodyLabel);
-          std::string updateLabel = labels.substr(p2 + 1, p3 - p2 - 1);
-          QG->emit("LABEL", updateLabel, "-", "-");
+      emitForConditionAndUpdateLabel(CTX, $<sval>6, $7);
       }
       for_update RPARENTHESIS
       {
-          std::string labels($<sval>6);
-          size_t p1 = labels.find(',');
-          size_t p2 = labels.find(',', p1 + 1);
-          std::string condLabel = labels.substr(0, p1);
-          std::string bodyLabel = labels.substr(p1 + 1, p2 - p1 - 1);
-          QG->emit("JMP", "-", "-", condLabel);
-          QG->emit("LABEL", bodyLabel, "-", "-");
+      emitForBackEdgeAndBodyLabel(CTX, $<sval>6);
       }
       stmt
       {
-          std::string labels($<sval>6);
-          size_t p1 = labels.find(',');
-          size_t p2 = labels.find(',', p1 + 1);
-          size_t p3 = labels.find(',', p2 + 1);
-          std::string updateLabel = labels.substr(p2 + 1, p3 - p2 - 1);
-          std::string endLabel = labels.substr(p3 + 1);
-          QG->emit("JMP", "-", "-", updateLabel);
-          QG->emit("LABEL", endLabel, "-", "-");
-          CTX->breakLabels.pop_back();
-          CTX->continueLabels.pop_back();
-          SA->exitLoop();
-          ST->LeaveScope();
+      endForLoop(CTX, $<sval>6);
           free($<sval>6);
       }
     ;
@@ -500,43 +339,11 @@ expr_opt
 switch_stmt
     : SWITCH LPARENTHESIS expr RPARENTHESIS
       {
-          SA->enterSwitchContext();
-          std::string endLabel = QG->newLabel();
-          std::string dispatchLabel = QG->newLabel();
-          CTX->breakLabels.push_back(endLabel);
-          CTX->switchExprStack.push_back($3->place);
-          CTX->switchDispatchCases.emplace_back();
-          CTX->switchDispatchLabel.push_back(dispatchLabel);
-          CTX->switchDefaultLabel.push_back("");
-          QG->emit("JMP","-","-",dispatchLabel);
-          $<sval>$ = strdup(endLabel.c_str());
-          free($3);
+          $<sval>$ = beginSwitchStatement(CTX, $3);
       }
       LBRACE case_list RBRACE
       {
-          std::string endLabel($<sval>5);
-          QG->emit("JMP","-","-",endLabel);
-          std::string dispatchLabel = CTX->switchDispatchLabel.back();
-          QG->emit("LABEL",dispatchLabel,"-","-");
-          std::string switchExpr = CTX->switchExprStack.back();
-          for(const auto & entry:CTX->switchDispatchCases.back()){
-                std::string temp = QG->newTemp();
-                QG->emit("EQ",switchExpr,entry.literalPlace,temp);
-                QG->emit("JMP_TRUE",temp,"-",entry.caseLabel);
-          }
-          if(!CTX->switchDefaultLabel.back().empty()){
-            QG -> emit("JMP","-","-",CTX->switchDefaultLabel.back());
-          }
-          else {
-            QG->emit("JMP","-","-",endLabel);
-          }
-          QG->emit("LABEL",endLabel,"-","-");
-          CTX->breakLabels.pop_back();
-          CTX->switchExprStack.pop_back();
-          CTX->switchDispatchCases.pop_back();
-          CTX->switchDispatchLabel.pop_back();
-          CTX->switchDefaultLabel.pop_back();
-          SA->leaveSwitchContext();
+          endSwitchStatement(CTX, $<sval>5);
           free($<sval>5);
       }
     ;
@@ -549,50 +356,18 @@ case_list
 case_item
     : CASE literal COLON
       {
-          std::string caseLabel = QG->newLabel();
-          bool skipCase = !SA->validateCaseLabel(*$2,yylineno);
-          CTX->switchSkipCaseStack.push_back(skipCase);
-          if(skipCase) 
-            QG->beginSuppression();
-          else {
-            CTX->switchDispatchCases.back().push_back(SwitchCaseDispatch{$2->place,caseLabel});
-            QG->emit("LABEL",caseLabel,"-","-");
-          }
-
-          free($2);
-          
+          beginCaseClause(CTX, $2, yylineno);
       }
       stmt_list
       {
-          if(!CTX->switchSkipCaseStack.empty()){
-            bool skipCase = false;
-            skipCase = CTX->switchSkipCaseStack.back();
-            CTX->switchSkipCaseStack.pop_back();
-            if(skipCase){
-                QG->endSuppression();
-            } 
-          }
+          endCaseOrDefaultClause(CTX);
       }
     | DEFAULT COLON
       {
-          bool skipDefault = !SA->validateDefaultLabel(yylineno);
-          CTX->switchSkipCaseStack.push_back(skipDefault);
-          if(skipDefault){
-                QG->beginSuppression();
-          } else {
-            std::string defLabel = QG->newLabel();
-            CTX->switchDefaultLabel.back() = defLabel;
-            QG->emit("LABEL",defLabel,"-","-");
-          }
+          beginDefaultClause(CTX, yylineno);
       }
       stmt_list {
-        if(!CTX->switchSkipCaseStack.empty()){
-            bool skipDefault = CTX->switchSkipCaseStack.back();
-            CTX->switchSkipCaseStack.pop_back();
-            if(skipDefault){
-                QG->endSuppression();
-            }
-        }
+        endCaseOrDefaultClause(CTX);
       }
     ;
 
@@ -651,222 +426,57 @@ assign_expr
     : logical_or_expr { $$ = $1; }
     | IDENTIFIER ASSIGN assign_expr
       {
-          bool isAssignable = SA->checkAssignable($1, yylineno);
-          ExprAttr rhs = *$3;
-          free($3);
-          Symbol *sym = ST->lookup($1);
-          bool typeOk = false;
-          if (isAssignable && sym) {
-              typeOk = SA->validateAssignment(rhs, sym->dataType, yylineno);
-          }
-          if (isAssignable && sym && typeOk) {
-              SA->coerce(rhs, sym->dataType, yylineno);
-              sym->isInitialized = true;
-              QG->emit("ASSIGN", rhs.place, "-", sym->irName);
-          }
-          $$ = new ExprAttr();
-          $$->place = sym->irName;
-          $$->type = (isAssignable && sym && typeOk) ? sym->dataType : Type::UNKNOWN;
+          $$ = makeAssignExpr(CTX, $1, $3, yylineno);
           free($1);
       }
     | IDENTIFIER PLUSASSIGN assign_expr
       {
-          bool isAssignable = SA->checkAssignable($1, yylineno);
-          ExprAttr rhs = *$3;
-          free($3);
-          Type resultType = Type::UNKNOWN;
-          if (isAssignable) {
-              ExprAttr lhs = SA->resolveIdentifier($1, yylineno);
-              resultType = SA->checkBinaryOper(lhs, rhs, "PLUSASSIGN", yylineno);
-              if (resultType != Type::UNKNOWN) {
-                  std::string temp = QG->newTemp();
-                  QG->emit("ADD", lhs.place, rhs.place, temp);
-                  QG->emit("ASSIGN", temp, "-", lhs.place);
-              }
-          }
-          $$ = new ExprAttr();
-          $$->place = ST->getIRName($1);
-          $$->type = resultType;
+          $$ = makeCompoundAssignExpr(CTX, $1, $3, "PLUSASSIGN", "ADD", yylineno);
           free($1);
       }
     | IDENTIFIER MINUSASSIGN assign_expr
       {
-          bool isAssignable = SA->checkAssignable($1, yylineno);
-          ExprAttr rhs = *$3;
-          free($3);
-          Type resultType = Type::UNKNOWN;
-          if (isAssignable) {
-              ExprAttr lhs = SA->resolveIdentifier($1, yylineno);
-              resultType = SA->checkBinaryOper(lhs, rhs, "MINUSASSIGN", yylineno);
-              if (resultType != Type::UNKNOWN) {
-                  std::string temp = QG->newTemp();
-                  QG->emit("SUB", lhs.place, rhs.place, temp);
-                  QG->emit("ASSIGN", temp, "-", lhs.place);
-              }
-          }
-          $$ = new ExprAttr();
-          $$->place = ST->getIRName($1);
-          $$->type = resultType;
+          $$ = makeCompoundAssignExpr(CTX, $1, $3, "MINUSASSIGN", "SUB", yylineno);
           free($1);
       }
     | IDENTIFIER STARASSIGN assign_expr
       {
-          bool isAssignable = SA->checkAssignable($1, yylineno);
-          ExprAttr rhs = *$3;
-          free($3);
-          Type resultType = Type::UNKNOWN;
-          if (isAssignable) {
-              ExprAttr lhs = SA->resolveIdentifier($1, yylineno);
-              resultType = SA->checkBinaryOper(lhs, rhs, "STARASSIGN", yylineno);
-              if (resultType != Type::UNKNOWN) {
-                  std::string temp = QG->newTemp();
-                  QG->emit("MUL", lhs.place, rhs.place, temp);
-                  QG->emit("ASSIGN", temp, "-", lhs.place);
-              }
-          }
-          $$ = new ExprAttr();
-          $$->place = ST->getIRName($1);
-          $$->type = resultType;
+          $$ = makeCompoundAssignExpr(CTX, $1, $3, "STARASSIGN", "MUL", yylineno);
           free($1);
       }
     | IDENTIFIER DIVASSIGN assign_expr
       {
-          bool isAssignable = SA->checkAssignable($1, yylineno);
-          ExprAttr rhs = *$3;
-          free($3);
-          Type resultType = Type::UNKNOWN;
-          if (isAssignable) {
-              ExprAttr lhs = SA->resolveIdentifier($1, yylineno);
-              resultType = SA->checkBinaryOper(lhs, rhs, "DIVASSIGN", yylineno);
-              if (resultType != Type::UNKNOWN) {
-                  std::string temp = QG->newTemp();
-                  QG->emit("DIV", lhs.place, rhs.place, temp);
-                  QG->emit("ASSIGN", temp, "-", lhs.place);
-              }
-          }
-          $$ = new ExprAttr();
-          $$->place = ST->getIRName($1);
-          $$->type = resultType;
+          $$ = makeCompoundAssignExpr(CTX, $1, $3, "DIVASSIGN", "DIV", yylineno);
           free($1);
       }
     | IDENTIFIER MODASSIGN assign_expr
       {
-          bool isAssignable = SA->checkAssignable($1, yylineno);
-          ExprAttr rhs = *$3;
-          free($3);
-          Type resultType = Type::UNKNOWN;
-          if (isAssignable) {
-              ExprAttr lhs = SA->resolveIdentifier($1, yylineno);
-              resultType = SA->checkBinaryOper(lhs, rhs, "MODASSIGN", yylineno);
-              if (resultType != Type::UNKNOWN) {
-                  std::string temp = QG->newTemp();
-                  QG->emit("MOD", lhs.place, rhs.place, temp);
-                  QG->emit("ASSIGN", temp, "-", lhs.place);
-              }
-          }
-          $$ = new ExprAttr();
-          $$->place = ST->getIRName($1);
-          $$->type = resultType;
+          $$ = makeCompoundAssignExpr(CTX, $1, $3, "MODASSIGN", "MOD", yylineno);
           free($1);
       }
     | IDENTIFIER LSHIFTASSIGN assign_expr
       {
-          bool isAssignable = SA->checkAssignable($1, yylineno);
-          ExprAttr rhs = *$3;
-          free($3);
-          Type resultType = Type::UNKNOWN;
-          if (isAssignable) {
-              ExprAttr lhs = SA->resolveIdentifier($1, yylineno);
-              resultType = SA->checkBinaryOper(lhs, rhs, "LSHIFTASSIGN", yylineno);
-              if (resultType != Type::UNKNOWN) {
-                  std::string temp = QG->newTemp();
-                  QG->emit("SHL", lhs.place, rhs.place, temp);
-                  QG->emit("ASSIGN", temp, "-", lhs.place);
-              }
-          }
-          $$ = new ExprAttr();
-          $$->place = ST->getIRName($1);
-          $$->type = resultType;
+          $$ = makeCompoundAssignExpr(CTX, $1, $3, "LSHIFTASSIGN", "SHL", yylineno);
           free($1);
       }
     | IDENTIFIER RSHIFTASSIGN assign_expr
       {
-          bool isAssignable = SA->checkAssignable($1, yylineno);
-          ExprAttr rhs = *$3;
-          free($3);
-          Type resultType = Type::UNKNOWN;
-          if (isAssignable) {
-              ExprAttr lhs = SA->resolveIdentifier($1, yylineno);
-              resultType = SA->checkBinaryOper(lhs, rhs, "RSHIFTASSIGN", yylineno);
-              if (resultType != Type::UNKNOWN) {
-                  std::string temp = QG->newTemp();
-                  QG->emit("SHR", lhs.place, rhs.place, temp);
-                  QG->emit("ASSIGN", temp, "-", lhs.place);
-              }
-          }
-          $$ = new ExprAttr();
-          $$->place = ST->getIRName($1);
-          $$->type = resultType;
+          $$ = makeCompoundAssignExpr(CTX, $1, $3, "RSHIFTASSIGN", "SHR", yylineno);
           free($1);
       }
     | IDENTIFIER XORASSIGN assign_expr
       {
-          bool isAssignable = SA->checkAssignable($1, yylineno);
-          ExprAttr rhs = *$3;
-          free($3);
-          Type resultType = Type::UNKNOWN;
-          if (isAssignable) {
-              ExprAttr lhs = SA->resolveIdentifier($1, yylineno);
-              resultType = SA->checkBinaryOper(lhs, rhs, "XORASSIGN", yylineno);
-              if (resultType != Type::UNKNOWN) {
-                  std::string temp = QG->newTemp();
-                  QG->emit("BXOR", lhs.place, rhs.place, temp);
-                  QG->emit("ASSIGN", temp, "-", lhs.place);
-              }
-          }
-          $$ = new ExprAttr();
-          $$->place = ST->getIRName($1);
-          $$->type = resultType;
+          $$ = makeCompoundAssignExpr(CTX, $1, $3, "XORASSIGN", "BXOR", yylineno);
           free($1);
       }
     | IDENTIFIER ANDASSIGN assign_expr
       {
-          bool isAssignable = SA->checkAssignable($1, yylineno);
-          ExprAttr rhs = *$3;
-          free($3);
-          Type resultType = Type::UNKNOWN;
-          if (isAssignable) {
-              ExprAttr lhs = SA->resolveIdentifier($1, yylineno);
-              resultType = SA->checkBinaryOper(lhs, rhs, "ANDASSIGN", yylineno);
-              if (resultType != Type::UNKNOWN) {
-                  std::string temp = QG->newTemp();
-                  QG->emit("BAND", lhs.place, rhs.place, temp);
-                  QG->emit("ASSIGN", temp, "-", lhs.place);
-              }
-          }
-          $$ = new ExprAttr();
-          $$->place = ST->getIRName($1);
-          $$->type = resultType;
+          $$ = makeCompoundAssignExpr(CTX, $1, $3, "ANDASSIGN", "BAND", yylineno);
           free($1);
       }
     | IDENTIFIER ORASSIGN assign_expr
       {
-          bool isAssignable = SA->checkAssignable($1, yylineno);
-          ExprAttr rhs = *$3;
-          free($3);
-          Type resultType = Type::UNKNOWN;
-          if (isAssignable) {
-              ExprAttr lhs = SA->resolveIdentifier($1, yylineno);
-              resultType = SA->checkBinaryOper(lhs, rhs, "ORASSIGN", yylineno);
-              if (resultType != Type::UNKNOWN) {
-                  std::string temp = QG->newTemp();
-                  QG->emit("BOR", lhs.place, rhs.place, temp);
-                  QG->emit("ASSIGN", temp, "-", lhs.place);
-              }
-          }
-          $$ = new ExprAttr();
-          $$->place = ST->getIRName($1);
-          $$->type = resultType;
+          $$ = makeCompoundAssignExpr(CTX, $1, $3, "ORASSIGN", "BOR", yylineno);
           free($1);
       }
     ;
@@ -874,17 +484,7 @@ assign_expr
 logical_or_expr
     : logical_or_expr OR logical_and_expr
       {
-          Type t = SA->checkBinaryOper(*$1, *$3, "OR", yylineno);
-          std::string temp;
-          if (t != Type::UNKNOWN) {
-              temp = QG->newTemp();
-              QG->emit("OR", $1->place, $3->place, temp);
-          }
-          free($1); 
-          free($3);
-          $$ = new ExprAttr();
-          $$->place = temp;
-          $$->type = t;
+          $$ = makeBinaryExpr(CTX, $1, $3, "OR", "OR", yylineno);
       }
     | logical_and_expr { $$ = $1; }
     ;
@@ -892,17 +492,7 @@ logical_or_expr
 logical_and_expr
     : logical_and_expr AND bitwise_or_expr
       {
-          Type t = SA->checkBinaryOper(*$1, *$3, "AND", yylineno);
-          std::string temp;
-          if (t != Type::UNKNOWN) {
-              temp = QG->newTemp();
-              QG->emit("AND", $1->place, $3->place, temp);
-          }
-          free ($1);
-          free ($3);
-          $$ = new ExprAttr();
-          $$->place = temp;
-          $$->type = t;
+          $$ = makeBinaryExpr(CTX, $1, $3, "AND", "AND", yylineno);
       }
     | bitwise_or_expr { $$ = $1; }
     ;
@@ -910,17 +500,7 @@ logical_and_expr
 bitwise_or_expr
     : bitwise_or_expr BITWISEOR bitwise_xor_expr
       {
-          Type t = SA->checkBinaryOper(*$1, *$3, "BITWISEOR", yylineno);
-          std::string temp;
-          if (t != Type::UNKNOWN) {
-              temp = QG->newTemp();
-              QG->emit("BOR", $1->place, $3->place, temp);
-          }
-          free($1);
-          free($3);
-          $$ = new ExprAttr();
-          $$->place = temp;
-          $$->type = t;
+          $$ = makeBinaryExpr(CTX, $1, $3, "BITWISEOR", "BOR", yylineno);
       }
     | bitwise_xor_expr { $$ = $1; }
     ;
@@ -928,17 +508,7 @@ bitwise_or_expr
 bitwise_xor_expr
     : bitwise_xor_expr BITWISEXOR bitwise_and_expr
       {
-          Type t = SA->checkBinaryOper(*$1, *$3, "BITWISEXOR", yylineno);
-          std::string temp;
-          if (t != Type::UNKNOWN) {
-              temp = QG->newTemp();
-              QG->emit("BXOR", $1->place, $3->place, temp);
-          }
-          free($1);
-          free($3);
-          $$ = new ExprAttr();
-          $$->place = temp;
-          $$->type = t;
+          $$ = makeBinaryExpr(CTX, $1, $3, "BITWISEXOR", "BXOR", yylineno);
       }
     | bitwise_and_expr { $$ = $1; }
     ;
@@ -946,17 +516,7 @@ bitwise_xor_expr
 bitwise_and_expr
     : bitwise_and_expr BITWISEAND equality_expr
       {
-          Type t = SA->checkBinaryOper(*$1, *$3, "BITWISEAND", yylineno);
-          std::string temp;
-          if (t != Type::UNKNOWN) {
-              temp = QG->newTemp();
-              QG->emit("BAND", $1->place, $3->place, temp);
-          }
-          free($1);
-          free($3);
-          $$ = new ExprAttr();
-          $$->place = temp;
-          $$->type = t;
+          $$ = makeBinaryExpr(CTX, $1, $3, "BITWISEAND", "BAND", yylineno);
       }
     | equality_expr { $$ = $1; }
     ;
@@ -964,31 +524,11 @@ bitwise_and_expr
 equality_expr
     : equality_expr EQ relational_expr
       {
-          Type t = SA->checkBinaryOper(*$1, *$3, "EQ", yylineno);
-          std::string temp;
-          if (t != Type::UNKNOWN) {
-              temp = QG->newTemp();
-              QG->emit("EQ", $1->place, $3->place, temp);
-          }
-          free($1);
-          free($3);
-          $$ = new ExprAttr();
-          $$->place = temp;
-          $$->type = t;
+          $$ = makeBinaryExpr(CTX, $1, $3, "EQ", "EQ", yylineno);
       }
     | equality_expr NEQ relational_expr
       {
-          Type t = SA->checkBinaryOper(*$1, *$3, "NEQ", yylineno);
-          std::string temp;
-          if (t != Type::UNKNOWN) {
-              temp = QG->newTemp();
-              QG->emit("NEQ", $1->place, $3->place, temp);
-          }
-          free($1);
-          free($3);
-          $$ = new ExprAttr();
-          $$->place = temp;
-          $$->type = t;
+          $$ = makeBinaryExpr(CTX, $1, $3, "NEQ", "NEQ", yylineno);
       }
     | relational_expr { $$ = $1; }
     ;
@@ -996,59 +536,19 @@ equality_expr
 relational_expr
     : relational_expr LT shift_expr
       {
-          Type t = SA->checkBinaryOper(*$1, *$3, "LT", yylineno);
-          std::string temp;
-          if (t != Type::UNKNOWN) {
-              temp = QG->newTemp();
-              QG->emit("LT", $1->place, $3->place, temp);
-          }
-          free($1);
-          free($3);
-          $$ = new ExprAttr();
-          $$->place = temp;
-          $$->type = t;
+          $$ = makeBinaryExpr(CTX, $1, $3, "LT", "LT", yylineno);
       }
     | relational_expr GT shift_expr
       {
-          Type t = SA->checkBinaryOper(*$1, *$3, "GT", yylineno);
-          std::string temp;
-          if (t != Type::UNKNOWN) {
-              temp = QG->newTemp();
-              QG->emit("GT", $1->place, $3->place, temp);
-          }
-          free ($1);
-          free ($3);
-          $$ = new ExprAttr();
-          $$->place = temp;
-          $$->type = t;
+          $$ = makeBinaryExpr(CTX, $1, $3, "GT", "GT", yylineno);
       }
     | relational_expr LEQ shift_expr
       {
-          Type t = SA->checkBinaryOper(*$1, *$3, "LEQ", yylineno);
-          std::string temp;
-          if (t != Type::UNKNOWN) {
-              temp = QG->newTemp();
-              QG->emit("LEQ", $1->place, $3->place, temp);
-          }
-          free($1);
-          free($3);
-          $$ = new ExprAttr();
-          $$->place = temp;
-          $$->type = t;
+          $$ = makeBinaryExpr(CTX, $1, $3, "LEQ", "LEQ", yylineno);
       }
     | relational_expr GEQ shift_expr
       {
-          Type t = SA->checkBinaryOper(*$1, *$3, "GEQ", yylineno);
-          std::string temp;
-          if (t != Type::UNKNOWN) {
-              temp = QG->newTemp();
-              QG->emit("GEQ", $1->place, $3->place, temp);
-          }
-          free($1);
-          free($3);
-          $$ = new ExprAttr();
-          $$->place = temp;
-          $$->type = t;
+          $$ = makeBinaryExpr(CTX, $1, $3, "GEQ", "GEQ", yylineno);
       }
     | shift_expr { $$ = $1; }
     ;
@@ -1056,31 +556,11 @@ relational_expr
 shift_expr
     : shift_expr LSHIFT additive_expr
       {
-          Type t = SA->checkBinaryOper(*$1, *$3, "LSHIFT", yylineno);
-          std::string temp;
-          if (t != Type::UNKNOWN) {
-              temp = QG->newTemp();
-              QG->emit("SHL", $1->place, $3->place, temp);
-          }
-          free($1); 
-          free($3);
-          $$ = new ExprAttr();
-          $$->place = temp;
-          $$->type = t;
+          $$ = makeBinaryExpr(CTX, $1, $3, "LSHIFT", "SHL", yylineno);
       }
     | shift_expr RSHIFT additive_expr
       {
-          Type t = SA->checkBinaryOper(*$1, *$3, "RSHIFT", yylineno);
-          std::string temp;
-          if (t != Type::UNKNOWN) {
-              temp = QG->newTemp();
-              QG->emit("SHR", $1->place, $3->place, temp);
-          }
-          free ($1); 
-          free ($3);
-          $$ = new ExprAttr();
-          $$->place = temp;
-          $$->type = t;
+          $$ = makeBinaryExpr(CTX, $1, $3, "RSHIFT", "SHR", yylineno);
       }
     | additive_expr { $$ = $1; }
     ;
@@ -1088,31 +568,11 @@ shift_expr
 additive_expr
     : additive_expr PLUS multiplicative_expr
       {
-          Type t = SA->checkBinaryOper(*$1, *$3, "PLUS", yylineno);
-          std::string temp;
-          if (t != Type::UNKNOWN) {
-              temp = QG->newTemp();
-              QG->emit("ADD", $1->place, $3->place, temp);
-          }
-          free($1); 
-          free($3);
-          $$ = new ExprAttr();
-          $$->place = temp;
-          $$->type = t;
+          $$ = makeBinaryExpr(CTX, $1, $3, "PLUS", "ADD", yylineno);
       }
     | additive_expr MINUS multiplicative_expr
       {
-          Type t = SA->checkBinaryOper(*$1, *$3, "MINUS", yylineno);
-          std::string temp;
-          if (t != Type::UNKNOWN) {
-              temp = QG->newTemp();
-              QG->emit("SUB", $1->place, $3->place, temp);
-          }
-          free($1); 
-          free($3);
-          $$ = new ExprAttr();
-          $$->place = temp;
-          $$->type = t;
+          $$ = makeBinaryExpr(CTX, $1, $3, "MINUS", "SUB", yylineno);
       }
     | multiplicative_expr { $$ = $1; }
     ;
@@ -1120,45 +580,15 @@ additive_expr
 multiplicative_expr
     : multiplicative_expr STAR unary_expr
       {
-          Type t = SA->checkBinaryOper(*$1, *$3, "STAR", yylineno);
-          std::string temp;
-          if (t != Type::UNKNOWN) {
-              temp = QG->newTemp();
-              QG->emit("MUL", $1->place, $3->place, temp);
-          }
-          free($1); 
-          free($3);
-          $$ = new ExprAttr();
-          $$->place = temp;
-          $$->type = t;
+          $$ = makeBinaryExpr(CTX, $1, $3, "STAR", "MUL", yylineno);
       }
     | multiplicative_expr DIV unary_expr
       {
-          Type t = SA->checkBinaryOper(*$1, *$3, "DIV", yylineno);
-          std::string temp;
-          if (t != Type::UNKNOWN) {
-              temp = QG->newTemp();
-              QG->emit("DIV", $1->place, $3->place, temp);
-          }
-          free($1); 
-          free($3);
-          $$ = new ExprAttr();
-          $$->place = temp;
-          $$->type = t;
+          $$ = makeBinaryExpr(CTX, $1, $3, "DIV", "DIV", yylineno);
       }
     | multiplicative_expr MOD unary_expr
       {
-          Type t = SA->checkBinaryOper(*$1, *$3, "MOD", yylineno);
-          std::string temp;
-          if (t != Type::UNKNOWN) {
-              temp = QG->newTemp();
-              QG->emit("MOD", $1->place, $3->place, temp);
-          }
-          free($1); 
-          free($3);
-          $$ = new ExprAttr();
-          $$->place = temp;
-          $$->type = t;
+          $$ = makeBinaryExpr(CTX, $1, $3, "MOD", "MOD", yylineno);
       }
     | unary_expr { $$ = $1; }
     ;
@@ -1167,66 +597,25 @@ unary_expr
     : postfix_expr { $$ = $1; }
     | INC IDENTIFIER
       {
-          $$ = new ExprAttr();
-          bool isAssignable = SA->checkAssignable($2, yylineno);
-          if (isAssignable) {
-              ExprAttr id = SA->resolveIdentifier($2, yylineno);
-              QG->emit("INC", id.place, "-", id.place);
-              $$->place = id.place;
-              $$->type = id.type;
-          } else {
-              $$->place = std::string($2);
-              $$->type = Type::UNKNOWN;
-          }
+          $$ = makePrefixIncDecExpr(CTX, $2, "INC", yylineno);
           free($2);
       }
     | DEC IDENTIFIER
       {
-          $$ = new ExprAttr();
-          bool isAssignable = SA->checkAssignable($2, yylineno);
-          if (isAssignable) {
-              ExprAttr id = SA->resolveIdentifier($2, yylineno);
-              QG->emit("DEC", id.place, "-", id.place);
-              $$->place = id.place;
-              $$->type = id.type;
-          } else {
-              $$->place = std::string($2);
-              $$->type = Type::UNKNOWN;
-          }
+          $$ = makePrefixIncDecExpr(CTX, $2, "DEC", yylineno);
           free($2);
       }
     | NOT unary_expr
       {
-          std::string temp = QG->newTemp();
-          QG->emit("NOT", $2->place, "-", temp);
-          free($2);
-          $$ = new ExprAttr();
-          $$->place = temp;
-          $$->type = Type::BOOL;
+          $$ = makeUnaryExpr(CTX, $2, "NOT", "NOT", yylineno);
       }
     | BITWISENOT unary_expr
       {
-          Type t = SA->checkBinaryOper(*$2, *$2, "BITWISENOT", yylineno);
-          $$ = new ExprAttr();
-          if (t != Type::UNKNOWN) {
-              std::string temp = QG->newTemp();
-              QG->emit("BNOT", $2->place, "-", temp);
-              $$->place = temp;
-              $$->type = Type::INT;
-          } else {
-              $$->place = $2->place;
-              $$->type = Type::UNKNOWN;
-          }
-          free($2);
+          $$ = makeUnaryExpr(CTX, $2, "BITWISENOT", "BNOT", yylineno, Type::INT);
       }
     | MINUS unary_expr %prec UMINUS
       {
-          std::string temp = QG->newTemp();
-          QG->emit("UMINUS", $2->place, "-", temp);
-          $$ = new ExprAttr();
-          $$->place = temp;
-          $$->type = $2->type;
-          free($2);
+          $$ = makeUnaryExpr(CTX, $2, "UMINUS", "UMINUS", yylineno);
       }
     ;
 
@@ -1234,36 +623,12 @@ postfix_expr
     : primary_expr { $$ = $1; }
     | IDENTIFIER INC
       {
-          $$ = new ExprAttr();
-          bool isAssignable = SA->checkAssignable($1, yylineno);
-          if (isAssignable) {
-              ExprAttr id = SA->resolveIdentifier($1, yylineno);
-              std::string temp = QG->newTemp();
-              QG->emit("ASSIGN", id.place, "-", temp);
-              QG->emit("INC", id.place, "-", id.place);
-              $$->place = temp;
-              $$->type = id.type;
-          } else {
-              $$->place = std::string($1);
-              $$->type = Type::UNKNOWN;
-          }
+          $$ = makePostfixIncDecExpr(CTX, $1, "INC", yylineno);
           free($1);
       }
     | IDENTIFIER DEC
       {
-          $$ = new ExprAttr();
-          bool isAssignable = SA->checkAssignable($1, yylineno);
-          if (isAssignable) {
-              ExprAttr id = SA->resolveIdentifier($1, yylineno);
-              std::string temp = QG->newTemp();
-              QG->emit("ASSIGN", id.place, "-", temp);
-              QG->emit("DEC", id.place, "-", id.place);
-              $$->place = temp;
-              $$->type = id.type;
-          } else {
-              $$->place = std::string($1);
-              $$->type = Type::UNKNOWN;
-          }
+          $$ = makePostfixIncDecExpr(CTX, $1, "DEC", yylineno);
           free($1);
       }
     ;
@@ -1271,28 +636,14 @@ postfix_expr
 primary_expr
     : IDENTIFIER
       {
-          $$ = new ExprAttr(SA->resolveIdentifier($1, yylineno));
+      $$ = makeIdentifierExpr(CTX, $1, yylineno);
           free($1);
       }
     | IDENTIFIER LPARENTHESIS
       { CTX->passedArgs.clear(); }
       arg_list_opt RPARENTHESIS
       {
-          Type retType = SA->validateFunctionCall(
-              $1, CTX->passedArgs, yylineno);
-          for (auto &arg : CTX->passedArgs) {
-              QG->emit("PARAM", arg.place, "-", "-");
-          }
-          std::string temp = QG->newTemp();
-          if(retType != Type::VOID)
-            QG->emit("CALL", std::string($1),
-                   std::to_string(CTX->passedArgs.size()), temp);
-          else 
-            QG->emit("CALL", std::string($1),
-                   std::to_string(CTX->passedArgs.size()), "-");
-          $$ = new ExprAttr();
-          $$->place = temp;
-          $$->type = retType;
+                    $$ = makeFunctionCallExpr(CTX, $1, yylineno);
           free($1);
       }
     | literal { $$ = $1; }

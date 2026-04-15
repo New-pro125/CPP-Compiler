@@ -16,10 +16,11 @@ set(
     ${FLEX_Lexer_OUTPUTS}
     ${BISON_Parser_OUTPUTS}
     src/compiler.cpp
+    src/parser_action_helpers.cpp
     src/quadruple_generator.cpp
     src/error_handler.cpp
-    src/symbol_table.cpp       
-    src/semantic_analyzer.cpp  
+    src/symbol_table.cpp
+    src/semantic_analyzer.cpp
 )
 
 

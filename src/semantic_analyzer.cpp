@@ -123,7 +123,6 @@ ExprAttr SemanticAnalyzer::resolveIdentifier(const std::string &symbol_name, int
         result.isLvalue = false;
         return result;
     }
-    sym->isUsed = true;
     if (!sym->isFunction && !sym->isInitialized)
     {
         errorHandler->addSemanticError(line, "Variable '" + symbol_name + "' used before being initialized");
@@ -134,9 +133,9 @@ ExprAttr SemanticAnalyzer::resolveIdentifier(const std::string &symbol_name, int
         result.type = sym->dataType;
     }
     result.place = sym->irName;
-
     result.isLvalue = !sym->isConst && !sym->isFunction;
     result.isConst = sym->isConst;
+    result.isUsed = &sym->isUsed;
     return result;
 }
 
@@ -154,7 +153,7 @@ Type SemanticAnalyzer::validateFunctionCall(const std::string &name, std::vector
                                                  "' is not a function");
         return Type::UNKNOWN;
     }
-    sym->isUsed = true;
+    bool isValidCall = true;
     size_t requiredParams = sym->paramTypes.size();
     size_t providedArgs = args.size();
     // counte default values
@@ -169,12 +168,14 @@ Type SemanticAnalyzer::validateFunctionCall(const std::string &name, std::vector
     {
         errorHandler->addSemanticError(line, "Too few arguments to function '" + name + "': expected at least " +
                                                  std::to_string(minArgs) + ", got " + std::to_string(providedArgs));
+        isValidCall = false;
         return sym->returnType;
     }
     if (providedArgs > requiredParams)
     {
         errorHandler->addSemanticError(line, "Too many arguments to function '" + name + "': expected at most " +
                                                  std::to_string(requiredParams) + ", got " + std::to_string(providedArgs));
+        isValidCall = false;
         return sym->returnType;
     }
     // check type for each arg
@@ -187,7 +188,9 @@ Type SemanticAnalyzer::validateFunctionCall(const std::string &name, std::vector
                 errorHandler->addSemanticError(line, "Incompatible type for argument " + std::to_string(i + 1) +
                                                          " in call to '" + name + "': expected '" + typeToString(sym->paramTypes[i]) + "', got '" +
                                                          typeToString(args[i].type) + "'");
+                isValidCall = false;
             }
+
             // coercion
             else if (isNumericLike(args[i].type) && isNumericLike(sym->paramTypes[i]))
             {
@@ -196,6 +199,7 @@ Type SemanticAnalyzer::validateFunctionCall(const std::string &name, std::vector
                     errorHandler->addSemanticError(line, "Cannot convert argument " + std::to_string(i + 1) +
                                                              " from '" + typeToString(args[i].type) + "' to '" +
                                                              typeToString(sym->paramTypes[i]) + "' in call to '" + name + "'");
+                    isValidCall = false;
                 }
             }
             // incompatible
@@ -205,8 +209,13 @@ Type SemanticAnalyzer::validateFunctionCall(const std::string &name, std::vector
                                                "Incompatible type for argument " + std::to_string(i + 1) +
                                                    " in call to '" + name + "': expected '" + typeToString(sym->paramTypes[i]) + "', got '" +
                                                    typeToString(args[i].type) + "'");
+                isValidCall = false;
             }
         }
+    }
+    if (isValidCall)
+    {
+        sym->isUsed = true;
     }
     return sym->returnType;
 }
@@ -354,7 +363,6 @@ Type SemanticAnalyzer::checkBinaryOper(const ExprAttr &left, const ExprAttr &rig
     ExprAttr r = right;
     std::unordered_set<std::string> int_ops = {"BITWISEAND", "BITWISEOR", "BITWISEXOR", "RSHIFT", "LSHIFT", "MOD", "LSHIFTASSIGN", "RSHIFTASSIGN", "XORASSIGN", "ANDASSIGN", "ORASSIGN", "MODASSIGN", "BITWISENOT"};
     std::unordered_set<std::string> mathematical_ops = {"PLUSASSIGN", "MINUSASSIGN", "STARASSIGN", "DIVASSIGN", "PLUS", "MINUS", "STAR", "DIV"};
-    // TODO: Change the operators into the names used inside the parser
     // bitwise,mod => require integer types
     if (int_ops.count(op)) // if operator exists then get into here
     {
@@ -558,4 +566,18 @@ void SemanticAnalyzer::leaveSwitchContext()
     this->endSwitchCaseTracking();
     this->symTable->LeaveScope();
     this->exitSwitch();
+}
+Type SemanticAnalyzer::checkUnaryOper(const ExprAttr &expr, const std::string &op, int line)
+{
+    if ((op == "UMINUS") && (expr.type == Type::FLOAT || expr.type == Type::INT))
+        return expr.type;
+    else if ((op == "INC" || op == "DEC") && (expr.type == Type::FLOAT || expr.type == Type::INT || expr.type == Type::CHAR))
+        return expr.type;
+    else if (op == "BITWISENOT" && expr.type == Type::INT)
+        return expr.type;
+    else if (op == "NOT" && expr.type == Type::BOOL)
+        return expr.type;
+
+    this->errorHandler->addSemanticError(line, "Incompatible type '" + typeToString(expr.type) + "' with operator '" + op + "'.");
+    return Type::UNKNOWN;
 }

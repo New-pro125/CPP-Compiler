@@ -55,6 +55,7 @@ struct ExprAttr
     std::string place;
     bool isLvalue = false;
     bool isConst = false;
+    bool *isUsed = nullptr;
 };
 struct ParamList
 {
