@@ -137,9 +137,7 @@ ExprAttr *makeBinaryExpr(ParserContext *ctx,
     delete lhs;
     delete rhs;
 
-    auto *result = new ExprAttr();
-    result->place = temp;
-    result->type = t;
+    auto *result = new ExprAttr(t, temp);
     return result;
 }
 
@@ -207,114 +205,64 @@ ExprAttr *makeCompoundAssignExpr(ParserContext *ctx,
     return unknownExprFromName(name);
 }
 
-ExprAttr *makePrefixIncDecExpr(ParserContext *ctx,
-                               const char *identifier,
-                               const std::string &op,
-                               int line)
+ExprAttr *makeIncDecExpr(ParserContext *ctx,
+                         const char *identifier,
+                         const std::string &op,
+                         int line,
+                         bool isPostfix)
 {
     const std::string name(identifier);
     bool isAssignable = ctx->semAnalyzer->checkAssignable(name, line);
-    if (!isAssignable)
+    if (isAssignable)
     {
-        return unknownExprFromName(name);
-    }
 
-    ExprAttr id = ctx->semAnalyzer->resolveIdentifier(name, line);
-    Type resultType = ctx->semAnalyzer->checkUnaryOper(id, op, line);
-    if (resultType == Type::UNKNOWN)
-    {
+        ExprAttr id = ctx->semAnalyzer->resolveIdentifier(name, line);
+        Type resultType = ctx->semAnalyzer->checkUnaryOper(id, op, line);
+        if (resultType != Type::UNKNOWN)
+        {
+            std::string finalPlace = id.place;
+            if (isPostfix)
+            {
+                std::string temp = ctx->quadGenerator->newTemp();
+                ctx->quadGenerator->emit("ASSIGN", id.place, "-", temp);
+                finalPlace = temp;
+            }
+            ctx->quadGenerator->emit(op, id.place, "-", id.place);
+            if (id.isUsed)
+            {
+                *id.isUsed = true;
+            }
+
+            auto *result = new ExprAttr(id.type, finalPlace, id.isLvalue, id.isConst, id.isUsed);
+            return result;
+        }
         if (id.isUsed)
         {
             *id.isUsed = false;
         }
-        return unknownExprFromName(name);
     }
-
-    ctx->quadGenerator->emit(op, id.place, "-", id.place);
-    if (id.isUsed)
-    {
-        *id.isUsed = true;
-    }
-
-    auto *result = new ExprAttr(id.type, id.place, id.isLvalue, id.isConst, id.isUsed);
-    return result;
-}
-
-ExprAttr *makePostfixIncDecExpr(ParserContext *ctx,
-                                const char *identifier,
-                                const std::string &op,
-                                int line)
-{
-    const std::string name(identifier);
-    bool isAssignable = ctx->semAnalyzer->checkAssignable(name, line);
-    if (!isAssignable)
-    {
-        return unknownExprFromName(name);
-    }
-
-    ExprAttr id = ctx->semAnalyzer->resolveIdentifier(name, line);
-    Type resultType = ctx->semAnalyzer->checkUnaryOper(id, op, line);
-    if (resultType == Type::UNKNOWN)
-    {
-        if (id.isUsed)
-        {
-            *id.isUsed = false;
-        }
-        return unknownExprFromName(name);
-    }
-
-    std::string temp = ctx->quadGenerator->newTemp();
-    ctx->quadGenerator->emit("ASSIGN", id.place, "-", temp);
-    ctx->quadGenerator->emit(op, id.place, "-", id.place);
-    if (id.isUsed)
-    {
-        *id.isUsed = true;
-    }
-
-    auto *result = new ExprAttr(id.type, temp, id.isLvalue, id.isConst, id.isUsed);
-    return result;
+    return unknownExprFromName(name);
 }
 
 ExprAttr *makeUnaryExpr(ParserContext *ctx,
                         ExprAttr *operand,
                         const std::string &semanticOp,
                         const std::string &irOp,
-                        int line,
-                        Type successType)
+                        int line)
 {
     Type t = ctx->semAnalyzer->checkUnaryOper(*operand, semanticOp, line);
-
-    auto *result = new ExprAttr();
+    auto *result = new ExprAttr(t, operand->place);
     if (t != Type::UNKNOWN)
     {
-        if ((semanticOp == "UMINUS" && operand->type == Type::CHAR) ||
-            (semanticOp == "BITWISENOT" && (operand->type == Type::CHAR || operand->type == Type::BOOL)))
-        {
-            bool flag = ctx->semAnalyzer->coerce(*operand, Type::INT, line);
-            if (flag)
-                t = Type::INT;
-            else
-                t = Type::UNKNOWN;
-        }
-        if (t != Type::UNKNOWN)
-        {
-            std::string temp = ctx->quadGenerator->newTemp();
-            ctx->quadGenerator->emit(irOp, operand->place, "-", temp);
-            result->place = temp;
-            result->type = (successType == Type::UNKNOWN) ? t : successType;
-        }
-        else
-        {
-            result->place = operand->place;
-            result->type = Type::UNKNOWN;
-        }
-    }
-    else
-    {
-        result->place = operand->place;
-        result->type = Type::UNKNOWN;
-    }
 
+        if (t != operand->type)
+        {
+            ctx->semAnalyzer->coerce(*operand, t, line);
+        }
+        std::string temp = ctx->quadGenerator->newTemp();
+        ctx->quadGenerator->emit(irOp, operand->place, "-", temp);
+        result->place = temp;
+    }
     delete operand;
     return result;
 }
@@ -331,18 +279,9 @@ ExprAttr *makeFunctionCallExpr(ParserContext *ctx,
     {
         ctx->quadGenerator->emit("PARAM", arg.place, "-", "-");
     }
-
-    std::string temp = ctx->quadGenerator->newTemp();
-    if (retType != Type::VOID)
-    {
-        ctx->quadGenerator->emit("CALL", fn, std::to_string(currentArgs.size()), temp);
-    }
-    else
-    {
-        ctx->quadGenerator->emit("CALL", fn, std::to_string(currentArgs.size()), "-");
-    }
-
-    auto *result = new ExprAttr(retType, temp);
+    std::string quadResult = retType == Type::VOID ? "-" : ctx->quadGenerator->newTemp();
+    ctx->quadGenerator->emit("CALL", fn, std::to_string(currentArgs.size()), quadResult);
+    auto *result = new ExprAttr(retType, quadResult);
     return result;
 }
 

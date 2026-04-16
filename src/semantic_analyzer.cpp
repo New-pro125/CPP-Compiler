@@ -113,20 +113,16 @@ bool SemanticAnalyzer::coerce(ExprAttr &expr, Type targetType, int line)
 
 ExprAttr SemanticAnalyzer::resolveIdentifier(const std::string &symbol_name, int line)
 {
-    ExprAttr result;
     Symbol *sym = symTable->lookup(symbol_name);
+    ExprAttr result = ExprAttr(Type::UNKNOWN, symbol_name);
     if (sym == nullptr)
     {
         errorHandler->addSemanticError(line, "Undeclared identifier '" + symbol_name + "'");
-        result.type = Type::UNKNOWN;
-        result.place = symbol_name;
-        result.isLvalue = false;
         return result;
     }
     if (!sym->isFunction && !sym->isInitialized)
     {
         errorHandler->addSemanticError(line, "Variable '" + symbol_name + "' used before being initialized");
-        result.type = Type::UNKNOWN;
     }
     else
     {
@@ -579,12 +575,12 @@ Type SemanticAnalyzer::checkUnaryOper(const ExprAttr &expr, const std::string &o
     if (op == "UMINUS")
     {
         if (expr.type == Type::FLOAT || expr.type == Type::INT || expr.type == Type::CHAR)
-            return expr.type;
+            return expr.type == Type::FLOAT ? Type::FLOAT : Type::INT;
     }
     else if ((op == "INC" || op == "DEC") && (expr.type == Type::FLOAT || expr.type == Type::INT || expr.type == Type::CHAR))
-        return expr.type;
+        return expr.type == Type::FLOAT ? Type::FLOAT : Type::INT;
     else if (op == "BITWISENOT" && (expr.type == Type::INT || expr.type == Type::BOOL || expr.type == Type::CHAR))
-        return expr.type;
+        return Type::INT;
     else if (op == "NOT" && expr.type == Type::BOOL)
         return expr.type;
 

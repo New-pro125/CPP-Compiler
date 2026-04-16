@@ -357,7 +357,7 @@ for_update
 
 expr_opt
     : expr      { $$ = $1; }
-    |           { $$ = new ExprAttr(); $$->place = ""; $$->type = Type::BOOL; }
+    |           { $$ = new ExprAttr(Type::BOOL,""); }
     ;
 
 
@@ -623,12 +623,12 @@ unary_expr
     : postfix_expr { $$ = $1; }
     | INC IDENTIFIER
       {
-          $$ = makePrefixIncDecExpr(CTX, $2, "INC", yylineno);
+          $$ = makeIncDecExpr(CTX, $2, "INC", yylineno,false);
           free($2);
       }
     | DEC IDENTIFIER
       {
-          $$ = makePrefixIncDecExpr(CTX, $2, "DEC", yylineno);
+          $$ = makeIncDecExpr(CTX, $2, "DEC", yylineno,false);
           free($2);
       }
     | NOT unary_expr
@@ -637,7 +637,7 @@ unary_expr
       }
     | BITWISENOT unary_expr
       {
-          $$ = makeUnaryExpr(CTX, $2, "BITWISENOT", "BNOT", yylineno, Type::INT);
+          $$ = makeUnaryExpr(CTX, $2, "BITWISENOT", "BNOT", yylineno);
       }
     | MINUS unary_expr %prec UMINUS
       {
@@ -649,12 +649,12 @@ postfix_expr
     : primary_expr { $$ = $1; }
     | IDENTIFIER INC
       {
-          $$ = makePostfixIncDecExpr(CTX, $1, "INC", yylineno);
+          $$ = makeIncDecExpr(CTX, $1, "INC", yylineno);
           free($1);
       }
     | IDENTIFIER DEC
       {
-          $$ = makePostfixIncDecExpr(CTX, $1, "DEC", yylineno);
+          $$ = makeIncDecExpr(CTX, $1, "DEC", yylineno);
           free($1);
       }
     ;
@@ -679,34 +679,23 @@ primary_expr
 literal
     : INT_LITERAL
       {
-          $$ = new ExprAttr();
-          $$->place = std::to_string($1);
-          $$->type = Type::INT;
+          $$ = new ExprAttr(Type::INT,std::to_string($1));
       }
     | FLOAT_LITERAL
       {
-          $$ = new ExprAttr();
-          $$->place = std::to_string($1);
-          $$->type = Type::FLOAT;
+          $$ = new ExprAttr(Type::FLOAT,std::to_string($1));
       }
     | CHAR_LITERAL
       {
-          $$ = new ExprAttr();
-          $$->place = "'" + std::string(1, $1) + "'";
-          $$->place = serializeCharLiteral($1);
-          $$->type = Type::CHAR;
+          $$ = new ExprAttr(Type::CHAR,serializeCharLiteral($1));
       }
     | BOOL_LITERAL
       {
-          $$ = new ExprAttr();
-          $$->place = $1 ? "true" : "false";
-          $$->type = Type::BOOL;
+          $$ = new ExprAttr(Type::BOOL,$1 ? "true" : "false");
       }
     | STRING_LITERAL
       {
-          $$ = new ExprAttr();
-          $$->place = std::string($1);
-          $$->type = Type::STRING;
+          $$ = new ExprAttr(Type::STRING,std::string($1));
           free($1);
       }
     ;

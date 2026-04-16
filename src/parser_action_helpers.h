@@ -25,22 +25,17 @@ ExprAttr *makeCompoundAssignExpr(ParserContext *ctx,
                                  const std::string &irOp,
                                  int line);
 
-ExprAttr *makePrefixIncDecExpr(ParserContext *ctx,
-                               const char *identifier,
-                               const std::string &op,
-                               int line);
-
-ExprAttr *makePostfixIncDecExpr(ParserContext *ctx,
-                                const char *identifier,
-                                const std::string &op,
-                                int line);
+ExprAttr *makeIncDecExpr(ParserContext *ctx,
+                         const char *identifier,
+                         const std::string &op,
+                         int line,
+                         bool isPostfix = true);
 
 ExprAttr *makeUnaryExpr(ParserContext *ctx,
                         ExprAttr *operand,
                         const std::string &semanticOp,
                         const std::string &irOp,
-                        int line,
-                        Type successType = Type::UNKNOWN);
+                        int line);
 
 ExprAttr *makeFunctionCallExpr(ParserContext *ctx,
                                const char *functionName,
