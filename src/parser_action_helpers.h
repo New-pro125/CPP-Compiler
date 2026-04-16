@@ -73,6 +73,8 @@ void beginFunctionDefinition(ParserContext *ctx,
 void endFunctionDefinition(ParserContext *ctx,
                            const char *functionName);
 
+void markCurrentFunctionInvalid(ParserContext *ctx);
+
 char *beginIfCondition(ParserContext *ctx,
                        ExprAttr *conditionExpr, int line);
 

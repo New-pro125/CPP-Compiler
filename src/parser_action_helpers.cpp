@@ -266,7 +266,7 @@ ExprAttr *makeUnaryExpr(ParserContext *ctx,
     delete operand;
     return result;
 }
-
+// 1
 ExprAttr *makeFunctionCallExpr(ParserContext *ctx,
                                const char *functionName,
                                int line)
@@ -275,6 +275,10 @@ ExprAttr *makeFunctionCallExpr(ParserContext *ctx,
     std::vector<ExprAttr> currentArgs = ctx->passedArgs.back();
     ctx->passedArgs.pop_back();
     Type retType = ctx->semAnalyzer->validateFunctionCall(fn, currentArgs, line);
+    if (retType == Type::UNKNOWN)
+    {
+        return unknownExprFromName(fn);
+    }
     for (auto &arg : currentArgs)
     {
         ctx->quadGenerator->emit("PARAM", arg.place, "-", "-");
@@ -284,7 +288,7 @@ ExprAttr *makeFunctionCallExpr(ParserContext *ctx,
     auto *result = new ExprAttr(retType, quadResult);
     return result;
 }
-
+// 1
 ExprAttr *makeIdentifierExpr(ParserContext *ctx,
                              const char *identifier,
                              int line)
@@ -300,9 +304,16 @@ ExprAttr *makeIdentifierExpr(ParserContext *ctx,
     }
     return result;
 }
-
+// 2
 void leaveScopeWithUnusedWarnings(ParserContext *ctx)
 {
+    if (ctx->inFn && ctx->currFunctionInvalid)
+    {
+        ctx->symTable->removeCurrentScopeSymbols();
+        ctx->symTable->LeaveScope();
+        return;
+    }
+
     std::vector<Symbol> unused = ctx->symTable->getUnusedSymbolsInCurrentScope();
     for (const auto &sym : unused)
     {
@@ -311,7 +322,7 @@ void leaveScopeWithUnusedWarnings(ParserContext *ctx)
     }
     ctx->symTable->LeaveScope();
 }
-
+// 1
 void handleSimpleDeclarator(ParserContext *ctx,
                             const char *identifier,
                             int line)
@@ -320,18 +331,17 @@ void handleSimpleDeclarator(ParserContext *ctx,
     bool declTypeOk = validateDeclaratorType(ctx, name, line);
     if (ctx->currDeclConst)
     {
-        ctx->semAnalyzer->checkConstInitialized(name, false, line);
+        ctx->errHandler->addSemanticError(line,
+                                          "Const variable '" + name +
+                                              "' must be initialized at declaration");
+        return;
     }
     if (!declTypeOk)
     {
         return;
     }
 
-    Symbol sym;
-    sym.name = name;
-    sym.dataType = ctx->currDeclType;
-    sym.isConst = ctx->currDeclConst;
-    sym.isInitialized = false;
+    Symbol sym = Symbol(name, name, ctx->currDeclType, ctx->currDeclConst);
     sym.declaredLine = line;
     if (!ctx->symTable->insert(name, sym))
     {
@@ -339,62 +349,43 @@ void handleSimpleDeclarator(ParserContext *ctx,
                                           "Redeclaration of variable '" + name + "'");
     }
 }
-
+// 1
 void handleInitializedDeclarator(ParserContext *ctx,
                                  const char *identifier,
                                  ExprAttr *initExpr,
                                  int line)
 {
     const std::string name(identifier);
-    if (ctx->currDeclConst)
-    {
-        ctx->semAnalyzer->checkConstInitialized(name, true, line);
-    }
-
     bool declTypeOk = validateDeclaratorType(ctx, name, line);
-
-    ExprAttr rhs = *initExpr;
-    bool initOk = false;
-    if (declTypeOk)
-    {
-        initOk = ctx->semAnalyzer->validateAssignment(*initExpr, ctx->currDeclType, line);
-    }
-    if (initOk)
-    {
-        initOk = ctx->semAnalyzer->coerce(rhs, ctx->currDeclType, line);
-    }
-    delete initExpr;
-
     if (!declTypeOk)
-    {
         return;
-    }
-
-    Symbol sym;
-    sym.name = name;
-    sym.dataType = ctx->currDeclType;
-    sym.isConst = ctx->currDeclConst;
-    sym.isInitialized = initOk;
+    ExprAttr rhs = *initExpr;
+    delete initExpr;
+    bool initOk = ctx->semAnalyzer->validateAssignment(rhs, ctx->currDeclType, line);
+    if (!initOk)
+        return;
+    initOk = ctx->semAnalyzer->coerce(rhs, ctx->currDeclType, line);
+    Symbol sym = Symbol(name, name, ctx->currDeclType, ctx->currDeclConst, initOk);
     sym.declaredLine = line;
     if (!ctx->symTable->insert(name, sym))
     {
         ctx->errHandler->addSemanticError(line,
                                           "Redeclaration of variable '" + name + "'");
+        return;
     }
     if (initOk)
-    {
         ctx->quadGenerator->emit("ASSIGN", rhs.place, "-", ctx->symTable->getIRName(name));
-    }
 }
-
+// 1
 void resetFunctionParamContext(ParserContext *ctx)
 {
     ctx->currParam.clear();
     ctx->currParamConst.clear();
+    ctx->currParamError = false;
     ctx->currParamNames.clear();
     ctx->currParamDefaults.clear();
 }
-
+// 4
 void addFunctionParam(ParserContext *ctx,
                       Type paramType,
                       const char *paramName,
@@ -406,6 +397,7 @@ void addFunctionParam(ParserContext *ctx,
     {
         ctx->errHandler->addSemanticError(line,
                                           "Parameter '" + std::string(paramName) + "' cannot have type '" + typeToString(paramType) + "'");
+        ctx->currParamError = true;
         return;
     }
 
@@ -415,12 +407,34 @@ void addFunctionParam(ParserContext *ctx,
     ctx->currParamDefaults.push_back(defaultValue);
 }
 
+void markCurrentFunctionInvalid(ParserContext *ctx)
+{
+    if (!ctx->inFn)
+        return;
+    if (!ctx->currFunctionInvalid)
+        ctx->currFunctionInvalid = true;
+    if (!ctx->currFunctionSuppressed)
+    {
+        ctx->quadGenerator->beginSuppression();
+        ctx->currFunctionSuppressed = true;
+    }
+}
+
+// 1 TODO:
 void beginFunctionDefinition(ParserContext *ctx,
                              const char *functionName,
                              Type returnType,
                              int line)
 {
     const std::string name(functionName);
+
+    ctx->inFn = true;
+    ctx->currFnName = name;
+    ctx->currFnReturn = returnType;
+    ctx->currFunctionInvalid = false;
+    ctx->currFunctionSuppressed = false;
+    ctx->currFunctionInserted = false;
+    ctx->currFunctionQuadStart = ctx->quadGenerator->nextQuad();
 
     bool sawDefault = false;
     for (std::size_t i = 0; i < ctx->currParamDefaults.size(); i++)
@@ -433,50 +447,74 @@ void beginFunctionDefinition(ParserContext *ctx,
         {
             ctx->errHandler->addSemanticError(
                 line,
-                "Parameter '" + ctx->currParamNames[i] + "' must have a default value because a previous parameter does");
+                "Missing default argument on Parameter '" + ctx->currParamNames[i] + "'");
+            ctx->currParamError = true;
             break;
         }
     }
 
-    Symbol sym;
-    sym.name = name;
-    sym.dataType = returnType;
-    sym.returnType = returnType;
-    sym.isFunction = true;
-    sym.paramTypes = ctx->currParam;
-    sym.paramNames = ctx->currParamNames;
-    sym.defaultValues = ctx->currParamDefaults;
-    sym.declaredLine = line;
-    sym.isInitialized = true;
-    if (!ctx->symTable->insert(name, sym))
+    if (ctx->currParamError)
     {
-        ctx->errHandler->addSemanticError(line,
-                                          "Redeclaration of function '" + name + "'");
+        markCurrentFunctionInvalid(ctx);
+    }
+
+    if (!ctx->currFunctionInvalid)
+    {
+        Symbol sym = Symbol(name, name, returnType, false, true, false, true, line, 0, returnType);
+        sym.paramTypes = ctx->currParam;
+        sym.paramNames = ctx->currParamNames;
+        sym.defaultValues = ctx->currParamDefaults;
+        if (!ctx->symTable->insert(name, sym))
+        {
+            ctx->errHandler->addSemanticError(line,
+                                              "Redeclaration of function '" + name + "'");
+        }
+        else
+        {
+            ctx->currFunctionInserted = true;
+        }
     }
 
     ctx->semAnalyzer->setCurrentFunction(name, returnType);
-    ctx->quadGenerator->emit("FUNC_BEGIN", name, "-", "-");
+    if (!ctx->currFunctionInvalid)
+        ctx->quadGenerator->emit("FUNC_BEGIN", name, "-", "-");
     ctx->symTable->addScope();
 
     for (std::size_t i = 0; i < ctx->currParam.size(); i++)
     {
-        Symbol paramSym;
-        paramSym.name = ctx->currParamNames[i];
-        paramSym.dataType = ctx->currParam[i];
-        paramSym.isConst = (i < ctx->currParamConst.size()) ? ctx->currParamConst[i] : false;
-        paramSym.isInitialized = true;
+        // ParamSymbol
+        Symbol paramSym = Symbol(ctx->currParamNames[i], ctx->currParamNames[i], ctx->currParam[i], ((i < ctx->currParamConst.size()) ? ctx->currParamConst[i] : false), true);
         paramSym.declaredLine = line;
         ctx->symTable->insert(ctx->currParamNames[i], paramSym);
     }
 }
-
+// 1 TODO:
 void endFunctionDefinition(ParserContext *ctx,
                            const char *functionName)
 {
-    ctx->quadGenerator->emit("FUNC_END", functionName, "-", "-");
-    ctx->semAnalyzer->clearCurrentFunction();
-}
+    if (!ctx->currFunctionInvalid)
+    {
+        ctx->quadGenerator->emit("FUNC_END", functionName, "-", "-");
+    }
+    else
+    {
+        if (ctx->currFunctionInserted)
+            ctx->symTable->removeCurrentScopeSymbol(functionName);
+        ctx->quadGenerator->rollbackTo(ctx->currFunctionQuadStart);
+    }
+    if (ctx->currFunctionSuppressed)
+        ctx->quadGenerator->endSuppression();
 
+    ctx->semAnalyzer->clearCurrentFunction();
+    ctx->inFn = false;
+    ctx->currFnName.clear();
+    ctx->currFnReturn = Type::VOID;
+    ctx->currFunctionInvalid = false;
+    ctx->currFunctionSuppressed = false;
+    ctx->currFunctionInserted = false;
+    ctx->currFunctionQuadStart = -1;
+}
+// 1
 char *beginIfCondition(ParserContext *ctx,
                        ExprAttr *conditionExpr, int line)
 {
@@ -485,13 +523,13 @@ char *beginIfCondition(ParserContext *ctx,
     delete conditionExpr;
     return strdup(falseLabel.c_str());
 }
-
+// 1
 void endIfWithoutElse(ParserContext *ctx,
                       const char *falseLabel)
 {
     ctx->quadGenerator->emit("LABEL", falseLabel, "-", "-");
 }
-
+// 1
 char *beginElseBranch(ParserContext *ctx,
                       const char *falseLabel)
 {
@@ -500,13 +538,13 @@ char *beginElseBranch(ParserContext *ctx,
     ctx->quadGenerator->emit("LABEL", falseLabel, "-", "-");
     return strdup(endLabel.c_str());
 }
-
+// 1
 void endIfWithElse(ParserContext *ctx,
                    const char *endLabel)
 {
     ctx->quadGenerator->emit("LABEL", endLabel, "-", "-");
 }
-
+// 1
 char *beginWhileLoop(ParserContext *ctx)
 {
     std::string startLabel = ctx->quadGenerator->newLabel();
@@ -517,14 +555,14 @@ char *beginWhileLoop(ParserContext *ctx)
     ctx->semAnalyzer->enterLoop();
     return strdup(startLabel.c_str());
 }
-
+// 1
 void emitLoopConditionFalseJump(ParserContext *ctx,
                                 ExprAttr *conditionExpr, int line)
 {
     emitGuardedConditionalJump(ctx, conditionExpr, "JMP_FALSE", ctx->breakLabels.back(), line);
     delete conditionExpr;
 }
-
+// 1
 void endWhileLoop(ParserContext *ctx,
                   const char *startLabel)
 {
@@ -534,7 +572,7 @@ void endWhileLoop(ParserContext *ctx,
     ctx->continueLabels.pop_back();
     ctx->semAnalyzer->exitLoop();
 }
-
+// 1
 char *beginDoWhileLoop(ParserContext *ctx)
 {
     std::string startLabel = ctx->quadGenerator->newLabel();
@@ -546,14 +584,14 @@ char *beginDoWhileLoop(ParserContext *ctx)
     ctx->semAnalyzer->enterLoop();
     return strdup((startLabel + "," + condLabel + "," + endLabel).c_str());
 }
-
+// 1
 void emitDoWhileConditionLabel(ParserContext *ctx,
                                const char *packedLabels)
 {
     DoWhileLabels labels = unpackDoWhileLabels(packedLabels);
     ctx->quadGenerator->emit("LABEL", labels.condLabel, "-", "-");
 }
-
+// 1
 void endDoWhileLoop(ParserContext *ctx,
                     const char *packedLabels,
                     ExprAttr *conditionExpr, int line)
@@ -579,7 +617,7 @@ char *beginForLoop(ParserContext *ctx)
     ctx->semAnalyzer->enterLoop();
     return strdup((condLabel + "," + bodyLabel + "," + updateLabel + "," + endLabel).c_str());
 }
-
+// 1
 void emitForConditionAndUpdateLabel(ParserContext *ctx,
                                     const char *packedLabels,
                                     ExprAttr *conditionExpr, int line)
@@ -593,7 +631,7 @@ void emitForConditionAndUpdateLabel(ParserContext *ctx,
     ctx->quadGenerator->emit("JMP", "-", "-", labels.bodyLabel);
     ctx->quadGenerator->emit("LABEL", labels.updateLabel, "-", "-");
 }
-
+// 1
 void emitForBackEdgeAndBodyLabel(ParserContext *ctx,
                                  const char *packedLabels)
 {
@@ -601,7 +639,7 @@ void emitForBackEdgeAndBodyLabel(ParserContext *ctx,
     ctx->quadGenerator->emit("JMP", "-", "-", labels.condLabel);
     ctx->quadGenerator->emit("LABEL", labels.bodyLabel, "-", "-");
 }
-
+// 1
 void endForLoop(ParserContext *ctx,
                 const char *packedLabels)
 {
@@ -613,7 +651,7 @@ void endForLoop(ParserContext *ctx,
     ctx->semAnalyzer->exitLoop();
     ctx->symTable->LeaveScope();
 }
-
+// 1
 char *beginSwitchStatement(ParserContext *ctx,
                            ExprAttr *switchExpr,
                            int line)
@@ -637,7 +675,7 @@ char *beginSwitchStatement(ParserContext *ctx,
     delete switchExpr;
     return strdup(endLabel.c_str());
 }
-
+// 1
 void endSwitchStatement(ParserContext *ctx,
                         const char *endLabel)
 {
@@ -674,7 +712,7 @@ void endSwitchStatement(ParserContext *ctx,
     ctx->switchDefaultLabel.pop_back();
     ctx->semAnalyzer->leaveSwitchContext();
 }
-
+// 1
 void beginCaseClause(ParserContext *ctx,
                      ExprAttr *literal,
                      int line)
@@ -719,7 +757,7 @@ void beginCaseClause(ParserContext *ctx,
     }
     delete literal;
 }
-
+// 1
 void beginDefaultClause(ParserContext *ctx,
                         int line)
 {
@@ -737,6 +775,7 @@ void beginDefaultClause(ParserContext *ctx,
     }
 }
 
+// 2
 void endCaseOrDefaultClause(ParserContext *ctx)
 {
     if (!ctx->switchSkipCaseStack.empty())

@@ -29,7 +29,7 @@ static std::string serializeCharLiteral(char c){
         case '\0':
         return "'\\0'";
         case '\'':
-        return "'\\'";
+        return "'\\\''";
         default:
         break;
     }
@@ -427,6 +427,9 @@ return_stmt
           ExprAttr val = *$2;
       if (SA->validateReturn(SA->getCurrentFunctionReturnType(), &val, yylineno)) {
         QG->emit("RETURN", val.place, "-", "-");
+      }
+      else if (CTX->inFn && SA->getCurrentFunctionReturnType() != Type::VOID) {
+          markCurrentFunctionInvalid(CTX);
       }
           free($2);
       }

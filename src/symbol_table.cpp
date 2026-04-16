@@ -101,6 +101,8 @@ void SymbolTable::printSymbolTable()
     for (int i = 0; i < (int)this->archive.size(); i++)
     {
         const Symbol &sym = this->archive[i];
+        if (sym.isRemoved)
+            continue;
         std::cout << std::left << std::setw(20) << sym.irName << std::setw(10) << typeToString(sym.dataType) << std::setw(8)
                   << sym.scopeLevel << std::setw(8)
                   << (sym.isConst ? "yes" : "no")
@@ -128,6 +130,27 @@ Symbol *SymbolTable::lookupCurrentScope(const std::string &symbol_name)
     if (it != scopes.back().end())
         return (it->second);
     return nullptr;
+}
+
+bool SymbolTable::removeCurrentScopeSymbol(const std::string &symbol_name)
+{
+    auto it = scopes.back().find(symbol_name);
+    if (it == scopes.back().end())
+        return false;
+    if (it->second)
+        it->second->isRemoved = true;
+    scopes.back().erase(it);
+    return true;
+}
+
+void SymbolTable::removeCurrentScopeSymbols()
+{
+    for (auto &entry : scopes.back())
+    {
+        if (entry.second)
+            entry.second->isRemoved = true;
+    }
+    scopes.back().clear();
 }
 
 void SymbolTable::LeaveScope()

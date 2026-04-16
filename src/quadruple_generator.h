@@ -20,6 +20,7 @@ public:
     std::string newLabel();
 
     void backpatch(std::vector<int> &indices, const std::string &label);
+    void rollbackTo(int index);
     void beginSuppression();
     void endSuppression();
     std::vector<int> merge(const std::vector<int> &left, const std::vector<int> &right) const;

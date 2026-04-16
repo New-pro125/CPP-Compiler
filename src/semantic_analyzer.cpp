@@ -164,15 +164,13 @@ Type SemanticAnalyzer::validateFunctionCall(const std::string &name, std::vector
     {
         errorHandler->addSemanticError(line, "Too few arguments to function '" + name + "': expected at least " +
                                                  std::to_string(minArgs) + ", got " + std::to_string(providedArgs));
-        isValidCall = false;
-        return sym->returnType;
+        return Type::UNKNOWN;
     }
     if (providedArgs > requiredParams)
     {
         errorHandler->addSemanticError(line, "Too many arguments to function '" + name + "': expected at most " +
                                                  std::to_string(requiredParams) + ", got " + std::to_string(providedArgs));
-        isValidCall = false;
-        return sym->returnType;
+        return Type::UNKNOWN;
     }
     // check type for each arg
     for (size_t i = 0; i < providedArgs; i++)
@@ -212,8 +210,9 @@ Type SemanticAnalyzer::validateFunctionCall(const std::string &name, std::vector
     if (isValidCall)
     {
         sym->isUsed = true;
+        return sym->returnType;
     }
-    return sym->returnType;
+    return Type::UNKNOWN;
 }
 
 bool SemanticAnalyzer::checkAssignable(const std::string &name, int line)
@@ -234,17 +233,6 @@ bool SemanticAnalyzer::checkAssignable(const std::string &name, int line)
     if (sym->isConst)
     {
         errorHandler->addSemanticError(line, "Cannot assign to const variable '" + name + "'");
-        return false;
-    }
-    return true;
-}
-bool SemanticAnalyzer::checkConstInitialized(const std::string &name, bool hasInitializer, int line)
-{
-    if (!hasInitializer)
-    {
-        errorHandler->addSemanticError(line,
-                                       "Const variable '" + name +
-                                           "' must be initialized at declaration");
         return false;
     }
     return true;

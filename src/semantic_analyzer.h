@@ -41,7 +41,6 @@ public:
     Type validateFunctionCall(const std::string &name, std::vector<ExprAttr> &args, int line);
     bool validateReturn(Type expected, ExprAttr *value, int line);
     bool checkAssignable(const std::string &name, int line);
-    bool checkConstInitialized(const std::string &name, bool hasInitializer, int line);
     bool validateBreak(int line);
     bool validateContinue(int line);
     void enterSwitchContext();

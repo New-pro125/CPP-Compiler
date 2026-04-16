@@ -40,6 +40,15 @@ void QuadrupleGenerator::backpatch(std::vector<int> &indices, const std::string 
         }
     }
 }
+
+void QuadrupleGenerator::rollbackTo(int index)
+{
+    if (index < 0)
+        index = 0;
+    if (index < (int)quads.size())
+        quads.resize((std::size_t)index);
+}
+
 std::vector<int> QuadrupleGenerator::merge(const std::vector<int> &left, const std::vector<int> &right) const
 {
     std::vector<int> out(left.begin(), left.end());

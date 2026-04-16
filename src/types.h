@@ -21,12 +21,29 @@ struct Symbol
     bool isInitialized = false;
     bool isUsed = false;
     bool isFunction = false;
+    bool isRemoved = false;
     int declaredLine = -1;
     int scopeLevel = 0;
     std::vector<Type> paramTypes;
     std::vector<std::string> paramNames;
     std::vector<std::string> defaultValues;
     Type returnType = Type::VOID;
+    Symbol(const std::string &name,
+           const std::string &irName,
+           Type dataType = Type::UNKNOWN,
+           bool isConst = false,
+           bool isInitialized = false,
+           bool isUsed = false,
+           bool isFunction = false,
+           int declaredLine = -1,
+           int scopeLevel = 0, Type returnType = Type::VOID)
+        : name(name), irName(irName), dataType(dataType),
+          isConst(isConst), isInitialized(isInitialized),
+          isUsed(isUsed), isFunction(isFunction),
+          declaredLine(declaredLine), scopeLevel(scopeLevel),
+          returnType(returnType)
+    {
+    }
 };
 inline std::string typeToString(Type type)
 {

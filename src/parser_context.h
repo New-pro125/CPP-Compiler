@@ -24,7 +24,12 @@ struct ParserContext
     int loopDepth = 0, switchDepth = 0;
     std::vector<Type> currParam;
     std::vector<bool> currParamConst;
+    bool currParamError = false;
     std::vector<std::string> currParamNames, currParamDefaults;
+    bool currFunctionInvalid = false;
+    bool currFunctionSuppressed = false;
+    bool currFunctionInserted = false;
+    int currFunctionQuadStart = -1;
     std::vector<std::vector<ExprAttr>> passedArgs;
     std::vector<std::string> switchExprStack;
     std::vector<Type> switchExprTypeStack;
