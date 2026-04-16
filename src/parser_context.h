@@ -23,9 +23,11 @@ struct ParserContext
     Type currFnReturn = Type::VOID;
     int loopDepth = 0, switchDepth = 0;
     std::vector<Type> currParam;
+    std::vector<bool> currParamConst;
     std::vector<std::string> currParamNames, currParamDefaults;
-    std::vector<ExprAttr> passedArgs;
+    std::vector<std::vector<ExprAttr>> passedArgs;
     std::vector<std::string> switchExprStack;
+    std::vector<Type> switchExprTypeStack;
     std::vector<std::vector<SwitchCaseDispatch>> switchDispatchCases;
     std::vector<std::string> switchDispatchLabel;
     std::vector<std::string> switchDefaultLabel;

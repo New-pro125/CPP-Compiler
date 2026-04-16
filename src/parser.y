@@ -17,6 +17,29 @@ extern int yylineno;
 #define SA    CTX->semAnalyzer
 #define QG    CTX->quadGenerator
 #define EH    CTX->errHandler
+
+static std::string serializeCharLiteral(char c){
+    switch (c){
+        case '\n':
+        return "'\\n'";
+        case '\t':
+        return "'\\t'";
+        case '\r':
+        return "'\\r'";
+        case '\0':
+        return "'\\0'";
+        case '\'':
+        return "'\\'";
+        default:
+        break;
+    }
+    if(std::isprint(c)) {
+        return "'" + std::string(1,c) + "'";
+    }
+    char buf[8];
+    std::snprintf(buf,sizeof(buf),"\\x%02X",c);
+    return "'" + std::string(buf)+"'";
+}
 %}
 
 %define parse.error verbose
@@ -159,24 +182,26 @@ param_list
 param_decl
     : type_spec IDENTIFIER
       {
-          addFunctionParam(CTX, $1, $2, "");
+          addFunctionParam(CTX, $1, $2, "", false, yylineno);
           free($2);
       }
     | CONST type_spec IDENTIFIER
       {
-          addFunctionParam(CTX, $2, $3, "");
+          addFunctionParam(CTX, $2, $3, "", true, yylineno);
           free($3);
       }
     | type_spec IDENTIFIER ASSIGN literal
       {
-          addFunctionParam(CTX, $1, $2, $4->place);
-          delete $4;
+          bool defaultOk = SA->validateAssignment(*$4, $1, yylineno);
+          addFunctionParam(CTX, $1, $2, defaultOk ? $4->place : "", false, yylineno);
+          free($4);
           free($2);
       }
     | CONST type_spec IDENTIFIER ASSIGN literal
       {
-          addFunctionParam(CTX, $2, $3, $5->place);
-          delete $5;
+          bool defaultOk = SA->validateAssignment(*$5, $2, yylineno);
+          addFunctionParam(CTX, $2, $3, defaultOk ? $5->place : "", true, yylineno);
+          free($5);
           free($3);
       }
     ;
@@ -230,7 +255,7 @@ compound_stmt_func
 if_condition_prefix
     : IF LPARENTHESIS expr RPARENTHESIS
       {
-          $$ = beginIfCondition(CTX, $3);
+          $$ = beginIfCondition(CTX, $3,yylineno);
       }
     ;
 
@@ -261,7 +286,7 @@ while_stmt
       }
       LPARENTHESIS expr RPARENTHESIS
       {
-      emitLoopConditionFalseJump(CTX, $4);
+      emitLoopConditionFalseJump(CTX, $4,yylineno);
       }
       stmt
       {
@@ -282,7 +307,7 @@ do_while_stmt
       }
       expr RPARENTHESIS SEMICOLON
       {
-      endDoWhileLoop(CTX, $<sval>2, $7);
+      endDoWhileLoop(CTX, $<sval>2, $7,yylineno);
           free($<sval>2);
       }
     ;
@@ -297,7 +322,7 @@ for_stmt
       }
       expr_opt SEMICOLON
       {
-      emitForConditionAndUpdateLabel(CTX, $<sval>6, $7);
+      emitForConditionAndUpdateLabel(CTX, $<sval>6, $7,yylineno);
       }
       for_update RPARENTHESIS
       {
@@ -339,7 +364,7 @@ expr_opt
 switch_stmt
     : SWITCH LPARENTHESIS expr RPARENTHESIS
       {
-          $<sval>$ = beginSwitchStatement(CTX, $3);
+          $<sval>$ = beginSwitchStatement(CTX, $3,yylineno);
       }
       LBRACE case_list RBRACE
       {
@@ -393,28 +418,29 @@ continue_stmt
 return_stmt
     : RETURN SEMICOLON
       {
-          SA->validateReturn(SA->getCurrentFunctionReturnType(), nullptr, yylineno);
-          QG->emit("RETURN", "-", "-", "-");
+      if (SA->validateReturn(SA->getCurrentFunctionReturnType(), nullptr, yylineno)) {
+        QG->emit("RETURN", "-", "-", "-");
+      }
       }
     | RETURN expr SEMICOLON
       {
           ExprAttr val = *$2;
-          SA->validateReturn(SA->getCurrentFunctionReturnType(), &val, yylineno);
-          QG->emit("RETURN", val.place, "-", "-");
+      if (SA->validateReturn(SA->getCurrentFunctionReturnType(), &val, yylineno)) {
+        QG->emit("RETURN", val.place, "-", "-");
+      }
           free($2);
       }
     ;
 
 
 arg_list_opt
-    : { CTX->passedArgs.clear(); }
-      arg_list
-    |   { CTX->passedArgs.clear(); }
+    : arg_list
+    |
     ;
 
 arg_list
-    : arg_list COMMA expr  { CTX->passedArgs.push_back(*$3); free($3); }
-    | expr                 { CTX->passedArgs.push_back(*$1); free($1); }
+    : arg_list COMMA expr  { CTX->passedArgs.back().push_back(*$3); free($3); }
+    | expr                 { CTX->passedArgs.back().push_back(*$1); free($1); }
     | error RPARENTHESIS   { yyerrok; yyclearin; }
     ;
 
@@ -640,7 +666,7 @@ primary_expr
           free($1);
       }
     | IDENTIFIER LPARENTHESIS
-      { CTX->passedArgs.clear(); }
+      { CTX->passedArgs.push_back(std::vector<ExprAttr>()); }
       arg_list_opt RPARENTHESIS
       {
                     $$ = makeFunctionCallExpr(CTX, $1, yylineno);
@@ -667,6 +693,7 @@ literal
       {
           $$ = new ExprAttr();
           $$->place = "'" + std::string(1, $1) + "'";
+          $$->place = serializeCharLiteral($1);
           $$->type = Type::CHAR;
       }
     | BOOL_LITERAL

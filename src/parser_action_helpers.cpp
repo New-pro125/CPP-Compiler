@@ -7,12 +7,24 @@
 
 namespace
 {
+    /// This function used to create unknown expressions in case of validation failure
     ExprAttr *unknownExprFromName(const std::string &name)
     {
-        auto *result = new ExprAttr();
-        result->place = name;
-        result->type = Type::UNKNOWN;
+        auto *result = new ExprAttr(Type::UNKNOWN, name);
         return result;
+    }
+
+    bool validateDeclaratorType(ParserContext *ctx,
+                                const std::string &name,
+                                int line)
+    {
+        if (ctx->currDeclType == Type::VOID)
+        {
+            ctx->errHandler->addSemanticError(line,
+                                              "Identifier '" + name + "' cannot have  " + typeToString(ctx->currDeclType) + "' type");
+            return false;
+        }
+        return true;
     }
 
     struct DoWhileLabels
@@ -29,7 +41,9 @@ namespace
         std::string updateLabel;
         std::string endLabel;
     };
-
+    /// @brief split the do while labels out packed expression
+    /// @param packed const char * contains do while labels
+    /// @return DoWhileLabels with labels separated
     DoWhileLabels unpackDoWhileLabels(const char *packed)
     {
         std::string labels = packed ? packed : "";
@@ -44,7 +58,9 @@ namespace
             labels.substr(p1 + 1, p2 - p1 - 1),
             labels.substr(p2 + 1)};
     }
-
+    /// @brief split the packed labels into cond, body, update, end labels
+    /// @param packed
+    /// @return ForLabels
     ForLabels unpackForLabels(const char *packed)
     {
         std::string labels = packed ? packed : "";
@@ -63,6 +79,46 @@ namespace
     }
 }
 
+/// @brief check the type of condition expression if bool or not
+/// @param ctx
+/// @param conditionExpr
+/// @param line
+/// @return true if coditionExpr is boolean-like type
+bool validateAndCoerceConditionExpr(ParserContext *ctx, ExprAttr *conditionExpr, int line)
+{
+    if (conditionExpr == nullptr || conditionExpr->type == Type::UNKNOWN || conditionExpr->type == Type::STRING || conditionExpr->type == Type::VOID)
+    {
+        std::string actualType = (conditionExpr == nullptr) ? "unknown" : typeToString(conditionExpr->type);
+        ctx->errHandler->addSemanticError(
+            line,
+            "Invalid condition type '" + actualType + "' in conditional expression");
+        return false;
+    }
+    if (conditionExpr->type != Type::BOOL)
+    {
+        return ctx->semAnalyzer->coerce(*conditionExpr, Type::BOOL, line);
+    }
+    return true;
+}
+/// @brief emit the required jump quadruple if conditionExpr is boolean
+/// @param ctx
+/// @param conditionExpr
+/// @param jumpOp
+/// @param targetLabel
+/// @param line
+void emitGuardedConditionalJump(ParserContext *ctx, ExprAttr *conditionExpr, const std::string &jumpOp, const std::string &targetLabel, int line)
+{
+    ctx->quadGenerator->emit(validateAndCoerceConditionExpr(ctx, conditionExpr, line) ? jumpOp : "JMP", conditionExpr ? conditionExpr->place : "-", "-", targetLabel);
+}
+
+/// @brief validate if the binary expression lhs and rhs can use the binary operator
+/// @param ctx
+/// @param lhs
+/// @param rhs
+/// @param semanticOp the name of operators as used in `Semantic Analyzer`
+/// @param irOp the name of operators as emitted as quadruple
+/// @param line
+/// @return new ExprAttr
 ExprAttr *makeBinaryExpr(ParserContext *ctx,
                          ExprAttr *lhs,
                          ExprAttr *rhs,
@@ -87,6 +143,12 @@ ExprAttr *makeBinaryExpr(ParserContext *ctx,
     return result;
 }
 
+/// @brief checks if identifier can be assigned to given expression
+/// @param ctx
+/// @param identifier
+/// @param rhsExpr
+/// @param line
+/// @return new Expression if id to be assigned else new unknown ExprAttr
 ExprAttr *makeAssignExpr(ParserContext *ctx,
                          const char *identifier,
                          ExprAttr *rhsExpr,
@@ -104,19 +166,16 @@ ExprAttr *makeAssignExpr(ParserContext *ctx,
     if (isAssignable && sym)
     {
         typeOk = ctx->semAnalyzer->validateAssignment(rhs, sym->dataType, line);
+        if (typeOk)
+        {
+            ctx->semAnalyzer->coerce(rhs, sym->dataType, line);
+            sym->isInitialized = true;
+            ctx->quadGenerator->emit("ASSIGN", rhs.place, "-", sym->irName);
+            auto *result = new ExprAttr(sym->dataType, sym->irName, false, sym->isConst, &sym->isUsed);
+            return result;
+        }
     }
-    if (isAssignable && sym && typeOk)
-    {
-        ctx->semAnalyzer->coerce(rhs, sym->dataType, line);
-        sym->isInitialized = true;
-        ctx->quadGenerator->emit("ASSIGN", rhs.place, "-", sym->irName);
-        sym->isUsed = true;
-    }
-
-    auto *result = new ExprAttr();
-    result->place = sym ? sym->irName : name;
-    result->type = (isAssignable && sym && typeOk) ? sym->dataType : Type::UNKNOWN;
-    return result;
+    return unknownExprFromName(name);
 }
 
 ExprAttr *makeCompoundAssignExpr(ParserContext *ctx,
@@ -132,27 +191,20 @@ ExprAttr *makeCompoundAssignExpr(ParserContext *ctx,
     ExprAttr rhs = *rhsExpr;
     delete rhsExpr;
 
-    Type resultType = Type::UNKNOWN;
     if (isAssignable)
     {
         ExprAttr lhs = ctx->semAnalyzer->resolveIdentifier(name, line);
-        resultType = ctx->semAnalyzer->checkBinaryOper(lhs, rhs, semanticOp, line);
+        Type resultType = ctx->semAnalyzer->checkBinaryOper(lhs, rhs, semanticOp, line);
         if (resultType != Type::UNKNOWN)
         {
             std::string temp = ctx->quadGenerator->newTemp();
             ctx->quadGenerator->emit(irOp, lhs.place, rhs.place, temp);
             ctx->quadGenerator->emit("ASSIGN", temp, "-", lhs.place);
-            if (lhs.isUsed)
-            {
-                *lhs.isUsed = true;
-            }
+            auto *result = new ExprAttr(resultType, ctx->symTable->getIRName(name));
+            return result;
         }
     }
-
-    auto *result = new ExprAttr();
-    result->place = ctx->symTable->getIRName(name);
-    result->type = resultType;
-    return result;
+    return unknownExprFromName(name);
 }
 
 ExprAttr *makePrefixIncDecExpr(ParserContext *ctx,
@@ -184,9 +236,7 @@ ExprAttr *makePrefixIncDecExpr(ParserContext *ctx,
         *id.isUsed = true;
     }
 
-    auto *result = new ExprAttr();
-    result->place = id.place;
-    result->type = id.type;
+    auto *result = new ExprAttr(id.type, id.place, id.isLvalue, id.isConst, id.isUsed);
     return result;
 }
 
@@ -221,9 +271,7 @@ ExprAttr *makePostfixIncDecExpr(ParserContext *ctx,
         *id.isUsed = true;
     }
 
-    auto *result = new ExprAttr();
-    result->place = temp;
-    result->type = id.type;
+    auto *result = new ExprAttr(id.type, temp, id.isLvalue, id.isConst, id.isUsed);
     return result;
 }
 
@@ -239,10 +287,27 @@ ExprAttr *makeUnaryExpr(ParserContext *ctx,
     auto *result = new ExprAttr();
     if (t != Type::UNKNOWN)
     {
-        std::string temp = ctx->quadGenerator->newTemp();
-        ctx->quadGenerator->emit(irOp, operand->place, "-", temp);
-        result->place = temp;
-        result->type = (successType == Type::UNKNOWN) ? t : successType;
+        if ((semanticOp == "UMINUS" && operand->type == Type::CHAR) ||
+            (semanticOp == "BITWISENOT" && (operand->type == Type::CHAR || operand->type == Type::BOOL)))
+        {
+            bool flag = ctx->semAnalyzer->coerce(*operand, Type::INT, line);
+            if (flag)
+                t = Type::INT;
+            else
+                t = Type::UNKNOWN;
+        }
+        if (t != Type::UNKNOWN)
+        {
+            std::string temp = ctx->quadGenerator->newTemp();
+            ctx->quadGenerator->emit(irOp, operand->place, "-", temp);
+            result->place = temp;
+            result->type = (successType == Type::UNKNOWN) ? t : successType;
+        }
+        else
+        {
+            result->place = operand->place;
+            result->type = Type::UNKNOWN;
+        }
     }
     else
     {
@@ -259,9 +324,10 @@ ExprAttr *makeFunctionCallExpr(ParserContext *ctx,
                                int line)
 {
     const std::string fn(functionName);
-    Type retType = ctx->semAnalyzer->validateFunctionCall(fn, ctx->passedArgs, line);
-
-    for (auto &arg : ctx->passedArgs)
+    std::vector<ExprAttr> currentArgs = ctx->passedArgs.back();
+    ctx->passedArgs.pop_back();
+    Type retType = ctx->semAnalyzer->validateFunctionCall(fn, currentArgs, line);
+    for (auto &arg : currentArgs)
     {
         ctx->quadGenerator->emit("PARAM", arg.place, "-", "-");
     }
@@ -269,16 +335,14 @@ ExprAttr *makeFunctionCallExpr(ParserContext *ctx,
     std::string temp = ctx->quadGenerator->newTemp();
     if (retType != Type::VOID)
     {
-        ctx->quadGenerator->emit("CALL", fn, std::to_string(ctx->passedArgs.size()), temp);
+        ctx->quadGenerator->emit("CALL", fn, std::to_string(currentArgs.size()), temp);
     }
     else
     {
-        ctx->quadGenerator->emit("CALL", fn, std::to_string(ctx->passedArgs.size()), "-");
+        ctx->quadGenerator->emit("CALL", fn, std::to_string(currentArgs.size()), "-");
     }
 
-    auto *result = new ExprAttr();
-    result->place = temp;
-    result->type = retType;
+    auto *result = new ExprAttr(retType, temp);
     return result;
 }
 
@@ -314,9 +378,14 @@ void handleSimpleDeclarator(ParserContext *ctx,
                             int line)
 {
     const std::string name(identifier);
+    bool declTypeOk = validateDeclaratorType(ctx, name, line);
     if (ctx->currDeclConst)
     {
         ctx->semAnalyzer->checkConstInitialized(name, false, line);
+    }
+    if (!declTypeOk)
+    {
+        return;
     }
 
     Symbol sym;
@@ -343,13 +412,24 @@ void handleInitializedDeclarator(ParserContext *ctx,
         ctx->semAnalyzer->checkConstInitialized(name, true, line);
     }
 
-    bool initOk = ctx->semAnalyzer->validateAssignment(*initExpr, ctx->currDeclType, line);
+    bool declTypeOk = validateDeclaratorType(ctx, name, line);
+
     ExprAttr rhs = *initExpr;
+    bool initOk = false;
+    if (declTypeOk)
+    {
+        initOk = ctx->semAnalyzer->validateAssignment(*initExpr, ctx->currDeclType, line);
+    }
     if (initOk)
     {
         initOk = ctx->semAnalyzer->coerce(rhs, ctx->currDeclType, line);
     }
     delete initExpr;
+
+    if (!declTypeOk)
+    {
+        return;
+    }
 
     Symbol sym;
     sym.name = name;
@@ -371,6 +451,7 @@ void handleInitializedDeclarator(ParserContext *ctx,
 void resetFunctionParamContext(ParserContext *ctx)
 {
     ctx->currParam.clear();
+    ctx->currParamConst.clear();
     ctx->currParamNames.clear();
     ctx->currParamDefaults.clear();
 }
@@ -378,9 +459,19 @@ void resetFunctionParamContext(ParserContext *ctx)
 void addFunctionParam(ParserContext *ctx,
                       Type paramType,
                       const char *paramName,
-                      const std::string &defaultValue)
+                      const std::string &defaultValue,
+                      bool isConst,
+                      int line)
 {
+    if (paramType == Type::VOID)
+    {
+        ctx->errHandler->addSemanticError(line,
+                                          "Parameter '" + std::string(paramName) + "' cannot have type '" + typeToString(paramType) + "'");
+        return;
+    }
+
     ctx->currParam.push_back(paramType);
+    ctx->currParamConst.push_back(isConst);
     ctx->currParamNames.push_back(paramName);
     ctx->currParamDefaults.push_back(defaultValue);
 }
@@ -391,6 +482,23 @@ void beginFunctionDefinition(ParserContext *ctx,
                              int line)
 {
     const std::string name(functionName);
+
+    bool sawDefault = false;
+    for (std::size_t i = 0; i < ctx->currParamDefaults.size(); i++)
+    {
+        if (!ctx->currParamDefaults[i].empty())
+        {
+            sawDefault = true;
+        }
+        else if (sawDefault)
+        {
+            ctx->errHandler->addSemanticError(
+                line,
+                "Parameter '" + ctx->currParamNames[i] + "' must have a default value because a previous parameter does");
+            break;
+        }
+    }
+
     Symbol sym;
     sym.name = name;
     sym.dataType = returnType;
@@ -416,6 +524,7 @@ void beginFunctionDefinition(ParserContext *ctx,
         Symbol paramSym;
         paramSym.name = ctx->currParamNames[i];
         paramSym.dataType = ctx->currParam[i];
+        paramSym.isConst = (i < ctx->currParamConst.size()) ? ctx->currParamConst[i] : false;
         paramSym.isInitialized = true;
         paramSym.declaredLine = line;
         ctx->symTable->insert(ctx->currParamNames[i], paramSym);
@@ -430,10 +539,10 @@ void endFunctionDefinition(ParserContext *ctx,
 }
 
 char *beginIfCondition(ParserContext *ctx,
-                       ExprAttr *conditionExpr)
+                       ExprAttr *conditionExpr, int line)
 {
     std::string falseLabel = ctx->quadGenerator->newLabel();
-    ctx->quadGenerator->emit("JMP_FALSE", conditionExpr->place, "-", falseLabel);
+    emitGuardedConditionalJump(ctx, conditionExpr, "JMP_FALSE", falseLabel, line);
     delete conditionExpr;
     return strdup(falseLabel.c_str());
 }
@@ -471,9 +580,9 @@ char *beginWhileLoop(ParserContext *ctx)
 }
 
 void emitLoopConditionFalseJump(ParserContext *ctx,
-                                ExprAttr *conditionExpr)
+                                ExprAttr *conditionExpr, int line)
 {
-    ctx->quadGenerator->emit("JMP_FALSE", conditionExpr->place, "-", ctx->breakLabels.back());
+    emitGuardedConditionalJump(ctx, conditionExpr, "JMP_FALSE", ctx->breakLabels.back(), line);
     delete conditionExpr;
 }
 
@@ -508,10 +617,10 @@ void emitDoWhileConditionLabel(ParserContext *ctx,
 
 void endDoWhileLoop(ParserContext *ctx,
                     const char *packedLabels,
-                    ExprAttr *conditionExpr)
+                    ExprAttr *conditionExpr, int line)
 {
     DoWhileLabels labels = unpackDoWhileLabels(packedLabels);
-    ctx->quadGenerator->emit("JMP_TRUE", conditionExpr->place, "-", labels.startLabel);
+    emitGuardedConditionalJump(ctx, conditionExpr, "JMP_TRUE", labels.startLabel, line);
     delete conditionExpr;
     ctx->quadGenerator->emit("LABEL", labels.endLabel, "-", "-");
     ctx->breakLabels.pop_back();
@@ -534,12 +643,12 @@ char *beginForLoop(ParserContext *ctx)
 
 void emitForConditionAndUpdateLabel(ParserContext *ctx,
                                     const char *packedLabels,
-                                    ExprAttr *conditionExpr)
+                                    ExprAttr *conditionExpr, int line)
 {
     ForLabels labels = unpackForLabels(packedLabels);
     if (conditionExpr->place != "")
     {
-        ctx->quadGenerator->emit("JMP_FALSE", conditionExpr->place, "-", labels.endLabel);
+        emitGuardedConditionalJump(ctx, conditionExpr, "JMP_FALSE", labels.endLabel, line);
     }
     delete conditionExpr;
     ctx->quadGenerator->emit("JMP", "-", "-", labels.bodyLabel);
@@ -567,13 +676,21 @@ void endForLoop(ParserContext *ctx,
 }
 
 char *beginSwitchStatement(ParserContext *ctx,
-                           ExprAttr *switchExpr)
+                           ExprAttr *switchExpr,
+                           int line)
 {
     ctx->semAnalyzer->enterSwitchContext();
     std::string endLabel = ctx->quadGenerator->newLabel();
     std::string dispatchLabel = ctx->quadGenerator->newLabel();
     ctx->breakLabels.push_back(endLabel);
-    ctx->switchExprStack.push_back(switchExpr->place);
+    bool validSwitchType = switchExpr != nullptr && (switchExpr->type == Type::INT || switchExpr->type == Type::BOOL || switchExpr->type == Type::CHAR);
+    if (!validSwitchType)
+    {
+        std::string actualType = switchExpr ? typeToString(switchExpr->type) : "unknown";
+        ctx->errHandler->addSemanticError(line, "Switch expression must be integral type (int, char or bool), got '" + actualType + "'");
+    }
+    ctx->switchExprStack.push_back(validSwitchType ? switchExpr->place : "");
+    ctx->switchExprTypeStack.push_back(validSwitchType ? switchExpr->type : Type::UNKNOWN);
     ctx->switchDispatchCases.emplace_back();
     ctx->switchDispatchLabel.push_back(dispatchLabel);
     ctx->switchDefaultLabel.push_back("");
@@ -590,11 +707,14 @@ void endSwitchStatement(ParserContext *ctx,
     std::string dispatchLabel = ctx->switchDispatchLabel.back();
     ctx->quadGenerator->emit("LABEL", dispatchLabel, "-", "-");
     std::string switchExpr = ctx->switchExprStack.back();
-    for (const auto &entry : ctx->switchDispatchCases.back())
+    if (!switchExpr.empty())
     {
-        std::string temp = ctx->quadGenerator->newTemp();
-        ctx->quadGenerator->emit("EQ", switchExpr, entry.literalPlace, temp);
-        ctx->quadGenerator->emit("JMP_TRUE", temp, "-", entry.caseLabel);
+        for (const auto &entry : ctx->switchDispatchCases.back())
+        {
+            std::string temp = ctx->quadGenerator->newTemp();
+            ctx->quadGenerator->emit("EQ", switchExpr, entry.literalPlace, temp);
+            ctx->quadGenerator->emit("JMP_TRUE", temp, "-", entry.caseLabel);
+        }
     }
 
     if (!ctx->switchDefaultLabel.back().empty())
@@ -609,6 +729,7 @@ void endSwitchStatement(ParserContext *ctx,
     ctx->quadGenerator->emit("LABEL", end, "-", "-");
     ctx->breakLabels.pop_back();
     ctx->switchExprStack.pop_back();
+    ctx->switchExprTypeStack.pop_back();
     ctx->switchDispatchCases.pop_back();
     ctx->switchDispatchLabel.pop_back();
     ctx->switchDefaultLabel.pop_back();
@@ -620,7 +741,33 @@ void beginCaseClause(ParserContext *ctx,
                      int line)
 {
     std::string caseLabel = ctx->quadGenerator->newLabel();
-    bool skipCase = !ctx->semAnalyzer->validateCaseLabel(*literal, line);
+    bool isIntegralLiteral = literal != nullptr &&
+                             (literal->type == Type::INT || literal->type == Type::CHAR || literal->type == Type::BOOL);
+    bool skipCase = false;
+
+    if (!isIntegralLiteral)
+    {
+        std::string actualType = literal ? typeToString(literal->type) : "unknown";
+        ctx->errHandler->addSemanticError(
+            line,
+            "Case label must be an integral type (int, char, or bool), got '" + actualType + "'");
+        skipCase = true;
+    }
+
+    if (!skipCase && !ctx->switchExprTypeStack.empty())
+    {
+        Type switchType = ctx->switchExprTypeStack.back();
+        if (switchType != Type::UNKNOWN)
+        {
+            skipCase = !ctx->semAnalyzer->coerce(*literal, switchType, line);
+        }
+    }
+
+    if (!skipCase)
+    {
+        skipCase = !ctx->semAnalyzer->validateCaseLabel(*literal, line);
+    }
+
     ctx->switchSkipCaseStack.push_back(skipCase);
     if (skipCase)
     {

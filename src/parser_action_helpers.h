@@ -66,7 +66,9 @@ void resetFunctionParamContext(ParserContext *ctx);
 void addFunctionParam(ParserContext *ctx,
                       Type paramType,
                       const char *paramName,
-                      const std::string &defaultValue);
+                      const std::string &defaultValue,
+                      bool isConst = false,
+                      int line = -1);
 
 void beginFunctionDefinition(ParserContext *ctx,
                              const char *functionName,
@@ -77,7 +79,7 @@ void endFunctionDefinition(ParserContext *ctx,
                            const char *functionName);
 
 char *beginIfCondition(ParserContext *ctx,
-                       ExprAttr *conditionExpr);
+                       ExprAttr *conditionExpr, int line);
 
 void endIfWithoutElse(ParserContext *ctx,
                       const char *falseLabel);
@@ -91,7 +93,7 @@ void endIfWithElse(ParserContext *ctx,
 char *beginWhileLoop(ParserContext *ctx);
 
 void emitLoopConditionFalseJump(ParserContext *ctx,
-                                ExprAttr *conditionExpr);
+                                ExprAttr *conditionExpr, int line);
 
 void endWhileLoop(ParserContext *ctx,
                   const char *startLabel);
@@ -103,13 +105,13 @@ void emitDoWhileConditionLabel(ParserContext *ctx,
 
 void endDoWhileLoop(ParserContext *ctx,
                     const char *packedLabels,
-                    ExprAttr *conditionExpr);
+                    ExprAttr *conditionExpr, int line);
 
 char *beginForLoop(ParserContext *ctx);
 
 void emitForConditionAndUpdateLabel(ParserContext *ctx,
                                     const char *packedLabels,
-                                    ExprAttr *conditionExpr);
+                                    ExprAttr *conditionExpr, int line);
 
 void emitForBackEdgeAndBodyLabel(ParserContext *ctx,
                                  const char *packedLabels);
@@ -118,7 +120,8 @@ void endForLoop(ParserContext *ctx,
                 const char *packedLabels);
 
 char *beginSwitchStatement(ParserContext *ctx,
-                           ExprAttr *switchExpr);
+                           ExprAttr *switchExpr,
+                           int line);
 
 void endSwitchStatement(ParserContext *ctx,
                         const char *endLabel);

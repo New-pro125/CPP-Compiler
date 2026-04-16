@@ -421,6 +421,13 @@ Type SemanticAnalyzer::checkBinaryOper(const ExprAttr &left, const ExprAttr &rig
     {
         if (l.type == Type::STRING && r.type == Type::STRING)
         {
+            if (op != "EQ" && op != "NEQ")
+
+            {
+                errorHandler->addSemanticError(line, "Operator '" + op + "' cannot be applied between '" +
+                                                         typeToString(l.type) + "' and '" + typeToString(r.type) + "'");
+                return Type::UNKNOWN;
+            }
             return Type::BOOL;
         }
 
@@ -569,11 +576,14 @@ void SemanticAnalyzer::leaveSwitchContext()
 }
 Type SemanticAnalyzer::checkUnaryOper(const ExprAttr &expr, const std::string &op, int line)
 {
-    if ((op == "UMINUS") && (expr.type == Type::FLOAT || expr.type == Type::INT))
-        return expr.type;
+    if (op == "UMINUS")
+    {
+        if (expr.type == Type::FLOAT || expr.type == Type::INT || expr.type == Type::CHAR)
+            return expr.type;
+    }
     else if ((op == "INC" || op == "DEC") && (expr.type == Type::FLOAT || expr.type == Type::INT || expr.type == Type::CHAR))
         return expr.type;
-    else if (op == "BITWISENOT" && expr.type == Type::INT)
+    else if (op == "BITWISENOT" && (expr.type == Type::INT || expr.type == Type::BOOL || expr.type == Type::CHAR))
         return expr.type;
     else if (op == "NOT" && expr.type == Type::BOOL)
         return expr.type;
