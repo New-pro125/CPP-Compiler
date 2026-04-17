@@ -114,7 +114,6 @@ decl_list
 decl
     : var_decl
     | func_decl
-    | stmt
     ;
 
 
@@ -208,7 +207,16 @@ param_decl
 
 
 stmt
-    : expr_stmt
+  :
+    {
+    validateStatementPlacement(CTX, yylineno);
+    }
+    stmt_core
+  | error SEMICOLON { yyerrok; yyclearin; }
+  ;
+
+stmt_core
+  : expr_stmt
     | compound_stmt
     | if_stmt
     | while_stmt
@@ -218,7 +226,6 @@ stmt
     | return_stmt
     | break_stmt
     | continue_stmt
-    | error SEMICOLON { yyerrok; yyclearin; }
     ;
 
 stmt_list
@@ -428,7 +435,7 @@ return_stmt
       if (SA->validateReturn(SA->getCurrentFunctionReturnType(), &val, yylineno)) {
         QG->emit("RETURN", val.place, "-", "-");
       }
-      else if (CTX->inFn && SA->getCurrentFunctionReturnType() != Type::VOID) {
+        else if (CTX->currFunction.inFn && SA->getCurrentFunctionReturnType() != Type::VOID) {
           markCurrentFunctionInvalid(CTX);
       }
           free($2);

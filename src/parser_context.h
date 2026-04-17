@@ -11,32 +11,55 @@ struct SwitchCaseDispatch
     std::string literalPlace;
     std::string caseLabel;
 };
+
+struct SwitchContext
+{
+    std::string exprPlace;
+    Type exprType = Type::UNKNOWN;
+    std::vector<SwitchCaseDispatch> dispatchCases;
+    std::string dispatchLabel;
+    std::string defaultLabel;
+    std::vector<bool> skipCaseStack;
+};
+
+struct FunctionParamSpec
+{
+    Type dataType = Type::UNKNOWN;
+    std::string name;
+    std::string defaultValue;
+    bool isConst = false;
+};
+
+struct FunctionParamContext
+{
+    std::vector<FunctionParamSpec> params;
+    bool hasError = false;
+};
+
+struct CurrentFunctionContext
+{
+    bool inFn = false;
+    std::string name;
+    Type returnType = Type::VOID;
+    FunctionParamContext params;
+    bool isInvalid = false;
+    bool isSuppressed = false;
+    bool isInserted = false;
+    int quadStart = -1;
+};
+
 struct ParserContext
 {
     SymbolTable *symTable = nullptr;
     SemanticAnalyzer *semAnalyzer = nullptr;
     QuadrupleGenerator *quadGenerator = nullptr;
     ErrorHandler *errHandler = nullptr;
+    bool currDeclConst = false;
     Type currDeclType = Type::UNKNOWN;
-    bool currDeclConst = false, inFn = false;
-    std::string currFnName;
-    Type currFnReturn = Type::VOID;
     int loopDepth = 0, switchDepth = 0;
-    std::vector<Type> currParam;
-    std::vector<bool> currParamConst;
-    bool currParamError = false;
-    std::vector<std::string> currParamNames, currParamDefaults;
-    bool currFunctionInvalid = false;
-    bool currFunctionSuppressed = false;
-    bool currFunctionInserted = false;
-    int currFunctionQuadStart = -1;
+    CurrentFunctionContext currFunction;
     std::vector<std::vector<ExprAttr>> passedArgs;
-    std::vector<std::string> switchExprStack;
-    std::vector<Type> switchExprTypeStack;
-    std::vector<std::vector<SwitchCaseDispatch>> switchDispatchCases;
-    std::vector<std::string> switchDispatchLabel;
-    std::vector<std::string> switchDefaultLabel;
-    std::vector<bool> switchSkipCaseStack;
+    std::vector<SwitchContext> switchContexts;
     std::vector<std::string> breakLabels, continueLabels;
 };
 extern ParserContext *parserContext;

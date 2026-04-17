@@ -77,6 +77,15 @@ namespace
             labels.substr(p2 + 1, p3 - p2 - 1),
             labels.substr(p3 + 1)};
     }
+
+    SwitchContext *currentSwitchContext(ParserContext *ctx)
+    {
+        if (ctx->switchContexts.empty())
+        {
+            return nullptr;
+        }
+        return &ctx->switchContexts.back();
+    }
 }
 
 /// @brief check the type of condition expression if bool or not
@@ -307,7 +316,7 @@ ExprAttr *makeIdentifierExpr(ParserContext *ctx,
 // 2
 void leaveScopeWithUnusedWarnings(ParserContext *ctx)
 {
-    if (ctx->inFn && ctx->currFunctionInvalid)
+    if (ctx->currFunction.inFn && ctx->currFunction.isInvalid)
     {
         ctx->symTable->removeCurrentScopeSymbols();
         ctx->symTable->LeaveScope();
@@ -379,11 +388,8 @@ void handleInitializedDeclarator(ParserContext *ctx,
 // 1
 void resetFunctionParamContext(ParserContext *ctx)
 {
-    ctx->currParam.clear();
-    ctx->currParamConst.clear();
-    ctx->currParamError = false;
-    ctx->currParamNames.clear();
-    ctx->currParamDefaults.clear();
+    ctx->currFunction.params.params.clear();
+    ctx->currFunction.params.hasError = false;
 }
 // 4
 void addFunctionParam(ParserContext *ctx,
@@ -397,26 +403,53 @@ void addFunctionParam(ParserContext *ctx,
     {
         ctx->errHandler->addSemanticError(line,
                                           "Parameter '" + std::string(paramName) + "' cannot have type '" + typeToString(paramType) + "'");
-        ctx->currParamError = true;
+        ctx->currFunction.params.hasError = true;
         return;
     }
 
-    ctx->currParam.push_back(paramType);
-    ctx->currParamConst.push_back(isConst);
-    ctx->currParamNames.push_back(paramName);
-    ctx->currParamDefaults.push_back(defaultValue);
+    FunctionParamSpec param;
+    param.dataType = paramType;
+    param.name = paramName;
+    param.defaultValue = defaultValue;
+    param.isConst = isConst;
+    ctx->currFunction.params.params.push_back(param);
 }
 
 void markCurrentFunctionInvalid(ParserContext *ctx)
 {
-    if (!ctx->inFn)
+    if (!ctx->currFunction.inFn)
         return;
-    if (!ctx->currFunctionInvalid)
-        ctx->currFunctionInvalid = true;
-    if (!ctx->currFunctionSuppressed)
+    if (!ctx->currFunction.isInvalid)
+        ctx->currFunction.isInvalid = true;
+    if (!ctx->currFunction.isSuppressed)
     {
         ctx->quadGenerator->beginSuppression();
-        ctx->currFunctionSuppressed = true;
+        ctx->currFunction.isSuppressed = true;
+    }
+}
+
+void validateStatementPlacement(ParserContext *ctx,
+                                int line)
+{
+    if (ctx->currFunction.inFn && ctx->currFunction.isInvalid)
+    {
+        return;
+    }
+
+    if (!ctx->currFunction.inFn)
+    {
+        ctx->errHandler->addSemanticError(
+            line,
+            "Only declarations and function definitions are allowed at global scope");
+        return;
+    }
+
+    if (ctx->currFunction.name != "main")
+    {
+        ctx->errHandler->addSemanticError(
+            line,
+            "Statements are only allowed in entry point function 'main'");
+        markCurrentFunctionInvalid(ctx);
     }
 }
 
@@ -427,19 +460,20 @@ void beginFunctionDefinition(ParserContext *ctx,
                              int line)
 {
     const std::string name(functionName);
+    const auto &params = ctx->currFunction.params.params;
 
-    ctx->inFn = true;
-    ctx->currFnName = name;
-    ctx->currFnReturn = returnType;
-    ctx->currFunctionInvalid = false;
-    ctx->currFunctionSuppressed = false;
-    ctx->currFunctionInserted = false;
-    ctx->currFunctionQuadStart = ctx->quadGenerator->nextQuad();
+    ctx->currFunction.inFn = true;
+    ctx->currFunction.name = name;
+    ctx->currFunction.returnType = returnType;
+    ctx->currFunction.isInvalid = false;
+    ctx->currFunction.isSuppressed = false;
+    ctx->currFunction.isInserted = false;
+    ctx->currFunction.quadStart = ctx->quadGenerator->nextQuad();
 
     bool sawDefault = false;
-    for (std::size_t i = 0; i < ctx->currParamDefaults.size(); i++)
+    for (std::size_t i = 0; i < params.size(); i++)
     {
-        if (!ctx->currParamDefaults[i].empty())
+        if (!params[i].defaultValue.empty())
         {
             sawDefault = true;
         }
@@ -447,23 +481,26 @@ void beginFunctionDefinition(ParserContext *ctx,
         {
             ctx->errHandler->addSemanticError(
                 line,
-                "Missing default argument on Parameter '" + ctx->currParamNames[i] + "'");
-            ctx->currParamError = true;
+                "Missing default argument on Parameter '" + params[i].name + "'");
+            ctx->currFunction.params.hasError = true;
             break;
         }
     }
 
-    if (ctx->currParamError)
+    if (ctx->currFunction.params.hasError)
     {
         markCurrentFunctionInvalid(ctx);
     }
 
-    if (!ctx->currFunctionInvalid)
+    if (!ctx->currFunction.isInvalid)
     {
         Symbol sym = Symbol(name, name, returnType, false, true, false, true, line, 0, returnType);
-        sym.paramTypes = ctx->currParam;
-        sym.paramNames = ctx->currParamNames;
-        sym.defaultValues = ctx->currParamDefaults;
+        for (const auto &param : params)
+        {
+            sym.paramTypes.push_back(param.dataType);
+            sym.paramNames.push_back(param.name);
+            sym.defaultValues.push_back(param.defaultValue);
+        }
         if (!ctx->symTable->insert(name, sym))
         {
             ctx->errHandler->addSemanticError(line,
@@ -471,48 +508,48 @@ void beginFunctionDefinition(ParserContext *ctx,
         }
         else
         {
-            ctx->currFunctionInserted = true;
+            ctx->currFunction.isInserted = true;
         }
     }
 
     ctx->semAnalyzer->setCurrentFunction(name, returnType);
-    if (!ctx->currFunctionInvalid)
+    if (!ctx->currFunction.isInvalid)
         ctx->quadGenerator->emit("FUNC_BEGIN", name, "-", "-");
     ctx->symTable->addScope();
 
-    for (std::size_t i = 0; i < ctx->currParam.size(); i++)
+    for (const auto &param : params)
     {
         // ParamSymbol
-        Symbol paramSym = Symbol(ctx->currParamNames[i], ctx->currParamNames[i], ctx->currParam[i], ((i < ctx->currParamConst.size()) ? ctx->currParamConst[i] : false), true);
+        Symbol paramSym = Symbol(param.name, param.name, param.dataType, param.isConst, true);
         paramSym.declaredLine = line;
-        ctx->symTable->insert(ctx->currParamNames[i], paramSym);
+        ctx->symTable->insert(param.name, paramSym);
     }
 }
 // 1 TODO:
 void endFunctionDefinition(ParserContext *ctx,
                            const char *functionName)
 {
-    if (!ctx->currFunctionInvalid)
+    if (!ctx->currFunction.isInvalid)
     {
         ctx->quadGenerator->emit("FUNC_END", functionName, "-", "-");
     }
     else
     {
-        if (ctx->currFunctionInserted)
+        if (ctx->currFunction.isInserted)
             ctx->symTable->removeCurrentScopeSymbol(functionName);
-        ctx->quadGenerator->rollbackTo(ctx->currFunctionQuadStart);
+        ctx->quadGenerator->rollbackTo(ctx->currFunction.quadStart);
     }
-    if (ctx->currFunctionSuppressed)
+    if (ctx->currFunction.isSuppressed)
         ctx->quadGenerator->endSuppression();
 
     ctx->semAnalyzer->clearCurrentFunction();
-    ctx->inFn = false;
-    ctx->currFnName.clear();
-    ctx->currFnReturn = Type::VOID;
-    ctx->currFunctionInvalid = false;
-    ctx->currFunctionSuppressed = false;
-    ctx->currFunctionInserted = false;
-    ctx->currFunctionQuadStart = -1;
+    ctx->currFunction.inFn = false;
+    ctx->currFunction.name.clear();
+    ctx->currFunction.returnType = Type::VOID;
+    ctx->currFunction.isInvalid = false;
+    ctx->currFunction.isSuppressed = false;
+    ctx->currFunction.isInserted = false;
+    ctx->currFunction.quadStart = -1;
 }
 // 1
 char *beginIfCondition(ParserContext *ctx,
@@ -666,11 +703,11 @@ char *beginSwitchStatement(ParserContext *ctx,
         std::string actualType = switchExpr ? typeToString(switchExpr->type) : "unknown";
         ctx->errHandler->addSemanticError(line, "Switch expression must be integral type (int, char or bool), got '" + actualType + "'");
     }
-    ctx->switchExprStack.push_back(validSwitchType ? switchExpr->place : "");
-    ctx->switchExprTypeStack.push_back(validSwitchType ? switchExpr->type : Type::UNKNOWN);
-    ctx->switchDispatchCases.emplace_back();
-    ctx->switchDispatchLabel.push_back(dispatchLabel);
-    ctx->switchDefaultLabel.push_back("");
+    ctx->switchContexts.emplace_back();
+    SwitchContext &switchCtx = ctx->switchContexts.back();
+    switchCtx.exprPlace = validSwitchType ? switchExpr->place : "";
+    switchCtx.exprType = validSwitchType ? switchExpr->type : Type::UNKNOWN;
+    switchCtx.dispatchLabel = dispatchLabel;
     ctx->quadGenerator->emit("JMP", "-", "-", dispatchLabel);
     delete switchExpr;
     return strdup(endLabel.c_str());
@@ -681,12 +718,18 @@ void endSwitchStatement(ParserContext *ctx,
 {
     const std::string end(endLabel);
     ctx->quadGenerator->emit("JMP", "-", "-", end);
-    std::string dispatchLabel = ctx->switchDispatchLabel.back();
-    ctx->quadGenerator->emit("LABEL", dispatchLabel, "-", "-");
-    std::string switchExpr = ctx->switchExprStack.back();
-    if (!switchExpr.empty())
+
+    SwitchContext *switchCtx = currentSwitchContext(ctx);
+    std::string switchExpr;
+    if (switchCtx)
     {
-        for (const auto &entry : ctx->switchDispatchCases.back())
+        ctx->quadGenerator->emit("LABEL", switchCtx->dispatchLabel, "-", "-");
+        switchExpr = switchCtx->exprPlace;
+    }
+
+    if (switchCtx && !switchExpr.empty())
+    {
+        for (const auto &entry : switchCtx->dispatchCases)
         {
             std::string temp = ctx->quadGenerator->newTemp();
             ctx->quadGenerator->emit("EQ", switchExpr, entry.literalPlace, temp);
@@ -694,9 +737,9 @@ void endSwitchStatement(ParserContext *ctx,
         }
     }
 
-    if (!ctx->switchDefaultLabel.back().empty())
+    if (switchCtx && !switchCtx->defaultLabel.empty())
     {
-        ctx->quadGenerator->emit("JMP", "-", "-", ctx->switchDefaultLabel.back());
+        ctx->quadGenerator->emit("JMP", "-", "-", switchCtx->defaultLabel);
     }
     else
     {
@@ -704,12 +747,14 @@ void endSwitchStatement(ParserContext *ctx,
     }
 
     ctx->quadGenerator->emit("LABEL", end, "-", "-");
-    ctx->breakLabels.pop_back();
-    ctx->switchExprStack.pop_back();
-    ctx->switchExprTypeStack.pop_back();
-    ctx->switchDispatchCases.pop_back();
-    ctx->switchDispatchLabel.pop_back();
-    ctx->switchDefaultLabel.pop_back();
+    if (!ctx->breakLabels.empty())
+    {
+        ctx->breakLabels.pop_back();
+    }
+    if (switchCtx)
+    {
+        ctx->switchContexts.pop_back();
+    }
     ctx->semAnalyzer->leaveSwitchContext();
 }
 // 1
@@ -717,6 +762,13 @@ void beginCaseClause(ParserContext *ctx,
                      ExprAttr *literal,
                      int line)
 {
+    SwitchContext *switchCtx = currentSwitchContext(ctx);
+    if (!switchCtx)
+    {
+        delete literal;
+        return;
+    }
+
     std::string caseLabel = ctx->quadGenerator->newLabel();
     bool isIntegralLiteral = literal != nullptr &&
                              (literal->type == Type::INT || literal->type == Type::CHAR || literal->type == Type::BOOL);
@@ -731,9 +783,9 @@ void beginCaseClause(ParserContext *ctx,
         skipCase = true;
     }
 
-    if (!skipCase && !ctx->switchExprTypeStack.empty())
+    if (!skipCase)
     {
-        Type switchType = ctx->switchExprTypeStack.back();
+        Type switchType = switchCtx->exprType;
         if (switchType != Type::UNKNOWN)
         {
             skipCase = !ctx->semAnalyzer->coerce(*literal, switchType, line);
@@ -745,14 +797,14 @@ void beginCaseClause(ParserContext *ctx,
         skipCase = !ctx->semAnalyzer->validateCaseLabel(*literal, line);
     }
 
-    ctx->switchSkipCaseStack.push_back(skipCase);
+    switchCtx->skipCaseStack.push_back(skipCase);
     if (skipCase)
     {
         ctx->quadGenerator->beginSuppression();
     }
     else
     {
-        ctx->switchDispatchCases.back().push_back(SwitchCaseDispatch{literal->place, caseLabel});
+        switchCtx->dispatchCases.push_back(SwitchCaseDispatch{literal->place, caseLabel});
         ctx->quadGenerator->emit("LABEL", caseLabel, "-", "-");
     }
     delete literal;
@@ -761,8 +813,14 @@ void beginCaseClause(ParserContext *ctx,
 void beginDefaultClause(ParserContext *ctx,
                         int line)
 {
+    SwitchContext *switchCtx = currentSwitchContext(ctx);
+    if (!switchCtx)
+    {
+        return;
+    }
+
     bool skipDefault = !ctx->semAnalyzer->validateDefaultLabel(line);
-    ctx->switchSkipCaseStack.push_back(skipDefault);
+    switchCtx->skipCaseStack.push_back(skipDefault);
     if (skipDefault)
     {
         ctx->quadGenerator->beginSuppression();
@@ -770,7 +828,7 @@ void beginDefaultClause(ParserContext *ctx,
     else
     {
         std::string defLabel = ctx->quadGenerator->newLabel();
-        ctx->switchDefaultLabel.back() = defLabel;
+        switchCtx->defaultLabel = defLabel;
         ctx->quadGenerator->emit("LABEL", defLabel, "-", "-");
     }
 }
@@ -778,10 +836,11 @@ void beginDefaultClause(ParserContext *ctx,
 // 2
 void endCaseOrDefaultClause(ParserContext *ctx)
 {
-    if (!ctx->switchSkipCaseStack.empty())
+    SwitchContext *switchCtx = currentSwitchContext(ctx);
+    if (switchCtx && !switchCtx->skipCaseStack.empty())
     {
-        bool skip = ctx->switchSkipCaseStack.back();
-        ctx->switchSkipCaseStack.pop_back();
+        bool skip = switchCtx->skipCaseStack.back();
+        switchCtx->skipCaseStack.pop_back();
         if (skip)
         {
             ctx->quadGenerator->endSuppression();

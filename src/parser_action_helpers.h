@@ -75,6 +75,9 @@ void endFunctionDefinition(ParserContext *ctx,
 
 void markCurrentFunctionInvalid(ParserContext *ctx);
 
+void validateStatementPlacement(ParserContext *ctx,
+                                int line);
+
 char *beginIfCondition(ParserContext *ctx,
                        ExprAttr *conditionExpr, int line);
 
