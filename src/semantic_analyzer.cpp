@@ -135,6 +135,22 @@ ExprAttr SemanticAnalyzer::resolveIdentifier(const std::string &symbol_name, int
     return result;
 }
 
+void SemanticAnalyzer::markExpressionAsRead(const ExprAttr &expr)
+{
+    if (expr.type != Type::UNKNOWN && expr.isUsed != nullptr)
+    {
+        *expr.isUsed = true;
+    }
+}
+
+void SemanticAnalyzer::markArgumentsAsRead(const std::vector<ExprAttr> &args)
+{
+    for (const ExprAttr &arg : args)
+    {
+        markExpressionAsRead(arg);
+    }
+}
+
 Type SemanticAnalyzer::validateFunctionCall(const std::string &name, std::vector<ExprAttr> &args, int line)
 {
     Symbol *sym = symTable->lookup(name);
@@ -209,6 +225,7 @@ Type SemanticAnalyzer::validateFunctionCall(const std::string &name, std::vector
     }
     if (isValidCall)
     {
+        markArgumentsAsRead(args);
         sym->isUsed = true;
         return sym->returnType;
     }
@@ -569,7 +586,7 @@ Type SemanticAnalyzer::checkUnaryOper(const ExprAttr &expr, const std::string &o
         return expr.type == Type::FLOAT ? Type::FLOAT : Type::INT;
     else if (op == "BITWISENOT" && (expr.type == Type::INT || expr.type == Type::BOOL || expr.type == Type::CHAR))
         return Type::INT;
-    else if (op == "NOT" && expr.type == Type::BOOL)
+    else if (op == "NOT" && (expr.type == Type::BOOL || expr.type == Type::INT || expr.type == Type::CHAR))
         return expr.type;
 
     this->errorHandler->addSemanticError(line, "Incompatible type '" + typeToString(expr.type) + "' with operator '" + op + "'.");

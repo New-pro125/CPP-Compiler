@@ -139,6 +139,8 @@ ExprAttr *makeBinaryExpr(ParserContext *ctx,
     std::string temp;
     if (t != Type::UNKNOWN)
     {
+        ctx->semAnalyzer->markExpressionAsRead(*lhs);
+        ctx->semAnalyzer->markExpressionAsRead(*rhs);
         temp = ctx->quadGenerator->newTemp();
         ctx->quadGenerator->emit(irOp, lhs->place, rhs->place, temp);
     }
@@ -176,6 +178,7 @@ ExprAttr *makeAssignExpr(ParserContext *ctx,
         if (typeOk)
         {
             ctx->semAnalyzer->coerce(rhs, sym->dataType, line);
+            ctx->semAnalyzer->markExpressionAsRead(rhs);
             sym->isInitialized = true;
             ctx->quadGenerator->emit("ASSIGN", rhs.place, "-", sym->irName);
             auto *result = new ExprAttr(sym->dataType, sym->irName, false, sym->isConst, &sym->isUsed);
@@ -204,6 +207,8 @@ ExprAttr *makeCompoundAssignExpr(ParserContext *ctx,
         Type resultType = ctx->semAnalyzer->checkBinaryOper(lhs, rhs, semanticOp, line);
         if (resultType != Type::UNKNOWN)
         {
+            ctx->semAnalyzer->markExpressionAsRead(lhs);
+            ctx->semAnalyzer->markExpressionAsRead(rhs);
             std::string temp = ctx->quadGenerator->newTemp();
             ctx->quadGenerator->emit(irOp, lhs.place, rhs.place, temp);
             ctx->quadGenerator->emit("ASSIGN", temp, "-", lhs.place);
@@ -237,17 +242,10 @@ ExprAttr *makeIncDecExpr(ParserContext *ctx,
                 finalPlace = temp;
             }
             ctx->quadGenerator->emit(op, id.place, "-", id.place);
-            if (id.isUsed)
-            {
-                *id.isUsed = true;
-            }
+            ctx->semAnalyzer->markExpressionAsRead(id);
 
             auto *result = new ExprAttr(id.type, finalPlace, id.isLvalue, id.isConst, id.isUsed);
             return result;
-        }
-        if (id.isUsed)
-        {
-            *id.isUsed = false;
         }
     }
     return unknownExprFromName(name);
@@ -268,6 +266,7 @@ ExprAttr *makeUnaryExpr(ParserContext *ctx,
         {
             ctx->semAnalyzer->coerce(*operand, t, line);
         }
+        ctx->semAnalyzer->markExpressionAsRead(*operand);
         std::string temp = ctx->quadGenerator->newTemp();
         ctx->quadGenerator->emit(irOp, operand->place, "-", temp);
         result->place = temp;
@@ -303,14 +302,7 @@ ExprAttr *makeIdentifierExpr(ParserContext *ctx,
                              int line)
 {
     auto *result = new ExprAttr(ctx->semAnalyzer->resolveIdentifier(identifier, line));
-    if (result->type != Type::UNKNOWN && result->isUsed)
-    {
-        *result->isUsed = true;
-    }
-    else if (result->isUsed)
-    {
-        *result->isUsed = false;
-    }
+    ctx->semAnalyzer->markExpressionAsRead(*result);
     return result;
 }
 // 2
@@ -374,6 +366,10 @@ void handleInitializedDeclarator(ParserContext *ctx,
     if (!initOk)
         return;
     initOk = ctx->semAnalyzer->coerce(rhs, ctx->currDeclType, line);
+    if (initOk)
+    {
+        ctx->semAnalyzer->markExpressionAsRead(rhs);
+    }
     Symbol sym = Symbol(name, name, ctx->currDeclType, ctx->currDeclConst, initOk);
     sym.declaredLine = line;
     if (!ctx->symTable->insert(name, sym))
@@ -388,8 +384,7 @@ void handleInitializedDeclarator(ParserContext *ctx,
 // 1
 void resetFunctionParamContext(ParserContext *ctx)
 {
-    ctx->currFunction.params.params.clear();
-    ctx->currFunction.params.hasError = false;
+    ctx->currFunction.params = FunctionParamContext();
 }
 // 4
 void addFunctionParam(ParserContext *ctx,
@@ -407,17 +402,12 @@ void addFunctionParam(ParserContext *ctx,
         return;
     }
 
-    FunctionParamSpec param;
-    param.dataType = paramType;
-    param.name = paramName;
-    param.defaultValue = defaultValue;
-    param.isConst = isConst;
-    ctx->currFunction.params.params.push_back(param);
+    ctx->currFunction.params.params.push_back(FunctionParamSpec(paramName, defaultValue, paramType, isConst));
 }
 
 void markCurrentFunctionInvalid(ParserContext *ctx)
 {
-    if (!ctx->currFunction.inFn)
+    if (!ctx->currFunction.inFn || (ctx->currFunction.inFn && ctx->currFunction.name == "main"))
         return;
     if (!ctx->currFunction.isInvalid)
         ctx->currFunction.isInvalid = true;
@@ -428,12 +418,12 @@ void markCurrentFunctionInvalid(ParserContext *ctx)
     }
 }
 
-void validateStatementPlacement(ParserContext *ctx,
+bool validateStatementPlacement(ParserContext *ctx,
                                 int line)
 {
     if (ctx->currFunction.inFn && ctx->currFunction.isInvalid)
     {
-        return;
+        return false;
     }
 
     if (!ctx->currFunction.inFn)
@@ -441,16 +431,10 @@ void validateStatementPlacement(ParserContext *ctx,
         ctx->errHandler->addSemanticError(
             line,
             "Only declarations and function definitions are allowed at global scope");
-        return;
+        return true;
     }
 
-    if (ctx->currFunction.name != "main")
-    {
-        ctx->errHandler->addSemanticError(
-            line,
-            "Statements are only allowed in entry point function 'main'");
-        markCurrentFunctionInvalid(ctx);
-    }
+    return false;
 }
 
 // 1 TODO:
@@ -460,15 +444,17 @@ void beginFunctionDefinition(ParserContext *ctx,
                              int line)
 {
     const std::string name(functionName);
+    FunctionParamContext paramsCtx = ctx->currFunction.params;
+    ctx->currFunction = CurrentFunctionContext(
+        name,
+        returnType,
+        paramsCtx,
+        true,
+        false,
+        false,
+        false,
+        ctx->quadGenerator->nextQuad());
     const auto &params = ctx->currFunction.params.params;
-
-    ctx->currFunction.inFn = true;
-    ctx->currFunction.name = name;
-    ctx->currFunction.returnType = returnType;
-    ctx->currFunction.isInvalid = false;
-    ctx->currFunction.isSuppressed = false;
-    ctx->currFunction.isInserted = false;
-    ctx->currFunction.quadStart = ctx->quadGenerator->nextQuad();
 
     bool sawDefault = false;
     for (std::size_t i = 0; i < params.size(); i++)
@@ -543,13 +529,7 @@ void endFunctionDefinition(ParserContext *ctx,
         ctx->quadGenerator->endSuppression();
 
     ctx->semAnalyzer->clearCurrentFunction();
-    ctx->currFunction.inFn = false;
-    ctx->currFunction.name.clear();
-    ctx->currFunction.returnType = Type::VOID;
-    ctx->currFunction.isInvalid = false;
-    ctx->currFunction.isSuppressed = false;
-    ctx->currFunction.isInserted = false;
-    ctx->currFunction.quadStart = -1;
+    ctx->currFunction = CurrentFunctionContext();
 }
 // 1
 char *beginIfCondition(ParserContext *ctx,
@@ -703,11 +683,10 @@ char *beginSwitchStatement(ParserContext *ctx,
         std::string actualType = switchExpr ? typeToString(switchExpr->type) : "unknown";
         ctx->errHandler->addSemanticError(line, "Switch expression must be integral type (int, char or bool), got '" + actualType + "'");
     }
-    ctx->switchContexts.emplace_back();
-    SwitchContext &switchCtx = ctx->switchContexts.back();
-    switchCtx.exprPlace = validSwitchType ? switchExpr->place : "";
-    switchCtx.exprType = validSwitchType ? switchExpr->type : Type::UNKNOWN;
-    switchCtx.dispatchLabel = dispatchLabel;
+    ctx->switchContexts.emplace_back(validSwitchType ? switchExpr->place : "",
+                                     dispatchLabel,
+                                     "",
+                                     validSwitchType ? switchExpr->type : Type::UNKNOWN);
     ctx->quadGenerator->emit("JMP", "-", "-", dispatchLabel);
     delete switchExpr;
     return strdup(endLabel.c_str());
@@ -797,14 +776,14 @@ void beginCaseClause(ParserContext *ctx,
         skipCase = !ctx->semAnalyzer->validateCaseLabel(*literal, line);
     }
 
-    switchCtx->skipCaseStack.push_back(skipCase);
+    switchCtx->skipCase.push_back(skipCase);
     if (skipCase)
     {
         ctx->quadGenerator->beginSuppression();
     }
     else
     {
-        switchCtx->dispatchCases.push_back(SwitchCaseDispatch{literal->place, caseLabel});
+        switchCtx->dispatchCases.emplace_back(literal->place, caseLabel);
         ctx->quadGenerator->emit("LABEL", caseLabel, "-", "-");
     }
     delete literal;
@@ -820,7 +799,7 @@ void beginDefaultClause(ParserContext *ctx,
     }
 
     bool skipDefault = !ctx->semAnalyzer->validateDefaultLabel(line);
-    switchCtx->skipCaseStack.push_back(skipDefault);
+    switchCtx->skipCase.push_back(skipDefault);
     if (skipDefault)
     {
         ctx->quadGenerator->beginSuppression();
@@ -837,10 +816,10 @@ void beginDefaultClause(ParserContext *ctx,
 void endCaseOrDefaultClause(ParserContext *ctx)
 {
     SwitchContext *switchCtx = currentSwitchContext(ctx);
-    if (switchCtx && !switchCtx->skipCaseStack.empty())
+    if (switchCtx && !switchCtx->skipCase.empty())
     {
-        bool skip = switchCtx->skipCaseStack.back();
-        switchCtx->skipCaseStack.pop_back();
+        bool skip = switchCtx->skipCase.back();
+        switchCtx->skipCase.pop_back();
         if (skip)
         {
             ctx->quadGenerator->endSuppression();

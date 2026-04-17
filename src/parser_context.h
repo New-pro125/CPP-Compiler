@@ -10,6 +10,9 @@ struct SwitchCaseDispatch
 {
     std::string literalPlace;
     std::string caseLabel;
+    SwitchCaseDispatch() = default;
+    SwitchCaseDispatch(const std::string &literalPlace, const std::string &caseLabel)
+        : literalPlace(literalPlace), caseLabel(caseLabel) {}
 };
 
 struct SwitchContext
@@ -19,33 +22,58 @@ struct SwitchContext
     std::vector<SwitchCaseDispatch> dispatchCases;
     std::string dispatchLabel;
     std::string defaultLabel;
-    std::vector<bool> skipCaseStack;
+    std::vector<bool> skipCase;
+    SwitchContext() = default;
+    SwitchContext(const std::string &exprPlace,
+                  const std::string &dispatchLabel,
+                  const std::string &defaultLabel = "",
+                  Type exprType = Type::UNKNOWN)
+        : exprPlace(exprPlace), exprType(exprType), dispatchCases(), dispatchLabel(dispatchLabel), defaultLabel(defaultLabel), skipCase() {}
 };
 
 struct FunctionParamSpec
 {
-    Type dataType = Type::UNKNOWN;
+    Type dataType;
     std::string name;
     std::string defaultValue;
-    bool isConst = false;
+    bool isConst;
+    FunctionParamSpec() : dataType(Type::UNKNOWN), name(), defaultValue(), isConst(false) {}
+    FunctionParamSpec(const std::string &name,
+                      const std::string &defaultValue,
+                      Type dataType = Type::UNKNOWN,
+                      bool isConst = false)
+        : dataType(dataType), name(name), defaultValue(defaultValue), isConst(isConst) {}
 };
 
 struct FunctionParamContext
 {
     std::vector<FunctionParamSpec> params;
-    bool hasError = false;
+    bool hasError;
+    FunctionParamContext() : params(), hasError(false) {}
+    explicit FunctionParamContext(bool hasError) : params(), hasError(hasError) {}
 };
 
 struct CurrentFunctionContext
 {
-    bool inFn = false;
+    bool inFn;
     std::string name;
     Type returnType = Type::VOID;
     FunctionParamContext params;
-    bool isInvalid = false;
-    bool isSuppressed = false;
-    bool isInserted = false;
-    int quadStart = -1;
+    bool isInvalid;
+    bool isSuppressed;
+    bool isInserted;
+    int quadStart;
+    CurrentFunctionContext()
+        : inFn(false), name(), returnType(Type::VOID), params(), isInvalid(false), isSuppressed(false), isInserted(false), quadStart(-1) {}
+    CurrentFunctionContext(const std::string &name,
+                           Type returnType,
+                           const FunctionParamContext &params,
+                           bool inFn = false,
+                           bool isInvalid = false,
+                           bool isSuppressed = false,
+                           bool isInserted = false,
+                           int quadStart = -1)
+        : inFn(inFn), name(name), returnType(returnType), params(params), isInvalid(isInvalid), isSuppressed(isSuppressed), isInserted(isInserted), quadStart(quadStart) {}
 };
 
 struct ParserContext

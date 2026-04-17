@@ -38,6 +38,8 @@ public:
     bool coerce(ExprAttr &expr, Type targetType, int line);
     bool validateAssignment(ExprAttr rhs, Type lhsType, int line);
     ExprAttr resolveIdentifier(const std::string &symbol_name, int line);
+    void markExpressionAsRead(const ExprAttr &expr);
+    void markArgumentsAsRead(const std::vector<ExprAttr> &args);
     Type validateFunctionCall(const std::string &name, std::vector<ExprAttr> &args, int line);
     bool validateReturn(Type expected, ExprAttr *value, int line);
     bool checkAssignable(const std::string &name, int line);

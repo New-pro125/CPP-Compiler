@@ -82,6 +82,7 @@ static std::string serializeCharLiteral(char c){
 %type <exprval> postfix_expr primary_expr literal
 %type <exprval> expr_opt
 %type <sval> if_condition_prefix
+%type <ival> stmt_guard
 
 %left COMMA
 %right ASSIGN PLUSASSIGN MINUSASSIGN STARASSIGN DIVASSIGN LSHIFTASSIGN RSHIFTASSIGN XORASSIGN ANDASSIGN ORASSIGN MODASSIGN
@@ -114,6 +115,7 @@ decl_list
 decl
     : var_decl
     | func_decl
+  | stmt
     ;
 
 
@@ -207,12 +209,29 @@ param_decl
 
 
 stmt
+  : stmt_guard stmt_core
+    {
+      if ($1 >= 0)
+      {
+          QG->rollbackTo($1);
+      }
+    }
+  | stmt_guard error SEMICOLON
+    {
+      if ($1 >= 0)
+      {
+          QG->rollbackTo($1);
+      }
+      yyerrok;
+      yyclearin;
+    }
+  ;
+
+stmt_guard
   :
     {
-    validateStatementPlacement(CTX, yylineno);
+      $$ = validateStatementPlacement(CTX, yylineno) ? QG->nextQuad() : -1;
     }
-    stmt_core
-  | error SEMICOLON { yyerrok; yyclearin; }
   ;
 
 stmt_core
