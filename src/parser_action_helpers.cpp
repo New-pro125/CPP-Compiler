@@ -7,7 +7,6 @@
 
 namespace
 {
-    /// This function used to create unknown expressions in case of validation failure
     ExprAttr *unknownExprFromName(const std::string &name)
     {
         auto *result = new ExprAttr(Type::UNKNOWN, name);
@@ -41,9 +40,6 @@ namespace
         std::string updateLabel;
         std::string endLabel;
     };
-    /// @brief split the do while labels out packed expression
-    /// @param packed const char * contains do while labels
-    /// @return DoWhileLabels with labels separated
     DoWhileLabels unpackDoWhileLabels(const char *packed)
     {
         std::string labels = packed ? packed : "";
@@ -58,9 +54,6 @@ namespace
             labels.substr(p1 + 1, p2 - p1 - 1),
             labels.substr(p2 + 1)};
     }
-    /// @brief split the packed labels into cond, body, update, end labels
-    /// @param packed
-    /// @return ForLabels
     ForLabels unpackForLabels(const char *packed)
     {
         std::string labels = packed ? packed : "";
@@ -88,11 +81,6 @@ namespace
     }
 }
 
-/// @brief check the type of condition expression if bool or not
-/// @param ctx
-/// @param conditionExpr
-/// @param line
-/// @return true if coditionExpr is boolean-like type
 bool validateAndCoerceConditionExpr(ParserContext *ctx, ExprAttr *conditionExpr, int line)
 {
     if (conditionExpr == nullptr || conditionExpr->type == Type::UNKNOWN || conditionExpr->type == Type::STRING || conditionExpr->type == Type::VOID)
@@ -109,25 +97,11 @@ bool validateAndCoerceConditionExpr(ParserContext *ctx, ExprAttr *conditionExpr,
     }
     return true;
 }
-/// @brief emit the required jump quadruple if conditionExpr is boolean
-/// @param ctx
-/// @param conditionExpr
-/// @param jumpOp
-/// @param targetLabel
-/// @param line
 void emitGuardedConditionalJump(ParserContext *ctx, ExprAttr *conditionExpr, const std::string &jumpOp, const std::string &targetLabel, int line)
 {
     ctx->quadGenerator->emit(validateAndCoerceConditionExpr(ctx, conditionExpr, line) ? jumpOp : "JMP", conditionExpr ? conditionExpr->place : "-", "-", targetLabel);
 }
 
-/// @brief validate if the binary expression lhs and rhs can use the binary operator
-/// @param ctx
-/// @param lhs
-/// @param rhs
-/// @param semanticOp the name of operators as used in `Semantic Analyzer`
-/// @param irOp the name of operators as emitted as quadruple
-/// @param line
-/// @return new ExprAttr
 ExprAttr *makeBinaryExpr(ParserContext *ctx,
                          ExprAttr *lhs,
                          ExprAttr *rhs,
@@ -152,12 +126,6 @@ ExprAttr *makeBinaryExpr(ParserContext *ctx,
     return result;
 }
 
-/// @brief checks if identifier can be assigned to given expression
-/// @param ctx
-/// @param identifier
-/// @param rhsExpr
-/// @param line
-/// @return new Expression if id to be assigned else new unknown ExprAttr
 ExprAttr *makeAssignExpr(ParserContext *ctx,
                          const char *identifier,
                          ExprAttr *rhsExpr,
@@ -274,7 +242,7 @@ ExprAttr *makeUnaryExpr(ParserContext *ctx,
     delete operand;
     return result;
 }
-// 1
+
 ExprAttr *makeFunctionCallExpr(ParserContext *ctx,
                                const char *functionName,
                                int line)
@@ -296,7 +264,7 @@ ExprAttr *makeFunctionCallExpr(ParserContext *ctx,
     auto *result = new ExprAttr(retType, quadResult);
     return result;
 }
-// 1
+
 ExprAttr *makeIdentifierExpr(ParserContext *ctx,
                              const char *identifier,
                              int line)
@@ -305,7 +273,7 @@ ExprAttr *makeIdentifierExpr(ParserContext *ctx,
     ctx->semAnalyzer->markExpressionAsRead(*result);
     return result;
 }
-// 2
+
 void leaveScopeWithUnusedWarnings(ParserContext *ctx)
 {
     if (ctx->currFunction.inFn && ctx->currFunction.isInvalid)
@@ -323,7 +291,7 @@ void leaveScopeWithUnusedWarnings(ParserContext *ctx)
     }
     ctx->symTable->LeaveScope();
 }
-// 1
+
 void handleSimpleDeclarator(ParserContext *ctx,
                             const char *identifier,
                             int line)
@@ -350,7 +318,7 @@ void handleSimpleDeclarator(ParserContext *ctx,
                                           "Redeclaration of variable '" + name + "'");
     }
 }
-// 1
+
 void handleInitializedDeclarator(ParserContext *ctx,
                                  const char *identifier,
                                  ExprAttr *initExpr,
@@ -381,12 +349,12 @@ void handleInitializedDeclarator(ParserContext *ctx,
     if (initOk)
         ctx->quadGenerator->emit("ASSIGN", rhs.place, "-", ctx->symTable->getIRName(name));
 }
-// 1
+
 void resetFunctionParamContext(ParserContext *ctx)
 {
     ctx->currFunction.params = FunctionParamContext();
 }
-// 4
+
 void addFunctionParam(ParserContext *ctx,
                       Type paramType,
                       const char *paramName,
@@ -437,7 +405,6 @@ bool validateStatementPlacement(ParserContext *ctx,
     return false;
 }
 
-// 1 TODO:
 void beginFunctionDefinition(ParserContext *ctx,
                              const char *functionName,
                              Type returnType,
@@ -505,13 +472,13 @@ void beginFunctionDefinition(ParserContext *ctx,
 
     for (const auto &param : params)
     {
-        // ParamSymbol
+
         Symbol paramSym = Symbol(param.name, param.name, param.dataType, param.isConst, true);
         paramSym.declaredLine = line;
         ctx->symTable->insert(param.name, paramSym);
     }
 }
-// 1 TODO:
+
 void endFunctionDefinition(ParserContext *ctx,
                            const char *functionName)
 {
@@ -531,7 +498,7 @@ void endFunctionDefinition(ParserContext *ctx,
     ctx->semAnalyzer->clearCurrentFunction();
     ctx->currFunction = CurrentFunctionContext();
 }
-// 1
+
 char *beginIfCondition(ParserContext *ctx,
                        ExprAttr *conditionExpr, int line)
 {
@@ -540,13 +507,13 @@ char *beginIfCondition(ParserContext *ctx,
     delete conditionExpr;
     return strdup(falseLabel.c_str());
 }
-// 1
+
 void endIfWithoutElse(ParserContext *ctx,
                       const char *falseLabel)
 {
     ctx->quadGenerator->emit("LABEL", falseLabel, "-", "-");
 }
-// 1
+
 char *beginElseBranch(ParserContext *ctx,
                       const char *falseLabel)
 {
@@ -555,13 +522,13 @@ char *beginElseBranch(ParserContext *ctx,
     ctx->quadGenerator->emit("LABEL", falseLabel, "-", "-");
     return strdup(endLabel.c_str());
 }
-// 1
+
 void endIfWithElse(ParserContext *ctx,
                    const char *endLabel)
 {
     ctx->quadGenerator->emit("LABEL", endLabel, "-", "-");
 }
-// 1
+
 char *beginWhileLoop(ParserContext *ctx)
 {
     std::string startLabel = ctx->quadGenerator->newLabel();
@@ -572,14 +539,14 @@ char *beginWhileLoop(ParserContext *ctx)
     ctx->semAnalyzer->enterLoop();
     return strdup(startLabel.c_str());
 }
-// 1
+
 void emitLoopConditionFalseJump(ParserContext *ctx,
                                 ExprAttr *conditionExpr, int line)
 {
     emitGuardedConditionalJump(ctx, conditionExpr, "JMP_FALSE", ctx->breakLabels.back(), line);
     delete conditionExpr;
 }
-// 1
+
 void endWhileLoop(ParserContext *ctx,
                   const char *startLabel)
 {
@@ -589,7 +556,7 @@ void endWhileLoop(ParserContext *ctx,
     ctx->continueLabels.pop_back();
     ctx->semAnalyzer->exitLoop();
 }
-// 1
+
 char *beginDoWhileLoop(ParserContext *ctx)
 {
     std::string startLabel = ctx->quadGenerator->newLabel();
@@ -601,14 +568,14 @@ char *beginDoWhileLoop(ParserContext *ctx)
     ctx->semAnalyzer->enterLoop();
     return strdup((startLabel + "," + condLabel + "," + endLabel).c_str());
 }
-// 1
+
 void emitDoWhileConditionLabel(ParserContext *ctx,
                                const char *packedLabels)
 {
     DoWhileLabels labels = unpackDoWhileLabels(packedLabels);
     ctx->quadGenerator->emit("LABEL", labels.condLabel, "-", "-");
 }
-// 1
+
 void endDoWhileLoop(ParserContext *ctx,
                     const char *packedLabels,
                     ExprAttr *conditionExpr, int line)
@@ -634,7 +601,7 @@ char *beginForLoop(ParserContext *ctx)
     ctx->semAnalyzer->enterLoop();
     return strdup((condLabel + "," + bodyLabel + "," + updateLabel + "," + endLabel).c_str());
 }
-// 1
+
 void emitForConditionAndUpdateLabel(ParserContext *ctx,
                                     const char *packedLabels,
                                     ExprAttr *conditionExpr, int line)
@@ -648,7 +615,7 @@ void emitForConditionAndUpdateLabel(ParserContext *ctx,
     ctx->quadGenerator->emit("JMP", "-", "-", labels.bodyLabel);
     ctx->quadGenerator->emit("LABEL", labels.updateLabel, "-", "-");
 }
-// 1
+
 void emitForBackEdgeAndBodyLabel(ParserContext *ctx,
                                  const char *packedLabels)
 {
@@ -656,7 +623,7 @@ void emitForBackEdgeAndBodyLabel(ParserContext *ctx,
     ctx->quadGenerator->emit("JMP", "-", "-", labels.condLabel);
     ctx->quadGenerator->emit("LABEL", labels.bodyLabel, "-", "-");
 }
-// 1
+
 void endForLoop(ParserContext *ctx,
                 const char *packedLabels)
 {
@@ -668,7 +635,7 @@ void endForLoop(ParserContext *ctx,
     ctx->semAnalyzer->exitLoop();
     ctx->symTable->LeaveScope();
 }
-// 1
+
 char *beginSwitchStatement(ParserContext *ctx,
                            ExprAttr *switchExpr,
                            int line)
@@ -696,7 +663,7 @@ char *beginSwitchStatement(ParserContext *ctx,
     delete switchExpr;
     return strdup(endLabel.c_str());
 }
-// 1
+
 void endSwitchStatement(ParserContext *ctx,
                         const char *endLabel)
 {
@@ -751,7 +718,7 @@ void endSwitchStatement(ParserContext *ctx,
     }
     ctx->semAnalyzer->leaveSwitchContext();
 }
-// 1
+
 void beginCaseClause(ParserContext *ctx,
                      ExprAttr *literal,
                      int line)
@@ -803,7 +770,7 @@ void beginCaseClause(ParserContext *ctx,
     }
     delete literal;
 }
-// 1
+
 void beginDefaultClause(ParserContext *ctx,
                         int line)
 {
@@ -827,7 +794,6 @@ void beginDefaultClause(ParserContext *ctx,
     }
 }
 
-// 2
 void endCaseOrDefaultClause(ParserContext *ctx)
 {
     SwitchContext *switchCtx = currentSwitchContext(ctx);
