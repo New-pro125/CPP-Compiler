@@ -8,7 +8,6 @@ enum ErrorType
     Warning = 0,
     Syntax = 1,
     Semantic = 2,
-    Unknown = 3,
 };
 struct CompilerError
 {
@@ -27,7 +26,6 @@ public:
     void addSemanticError(int line, const std::string &msg);
     void addWarning(int line, const std::string &msg);
     bool hasErrors() const;
-    const std::multimap<std::pair<int, int>, CompilerError> &getErrors() const;
     void print() const;
 };
 

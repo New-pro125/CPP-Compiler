@@ -85,11 +85,6 @@ Symbol *SymbolTable::lookup(const std::string &symbol_name)
     return nullptr;
 }
 
-int SymbolTable::getCurrentScopeLevel() const
-{
-    return currentScopeLevel;
-}
-
 void SymbolTable::printSymbolTable()
 {
     std::cout << "\nSymbol Table\n";
@@ -122,14 +117,6 @@ void SymbolTable::printSymbolTable()
             std::cout << std::endl;
         }
     }
-}
-
-Symbol *SymbolTable::lookupCurrentScope(const std::string &symbol_name)
-{
-    auto it = scopes.back().find(symbol_name);
-    if (it != scopes.back().end())
-        return (it->second);
-    return nullptr;
 }
 
 bool SymbolTable::removeCurrentScopeSymbol(const std::string &symbol_name)

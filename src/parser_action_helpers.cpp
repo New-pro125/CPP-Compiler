@@ -83,9 +83,9 @@ namespace
 
 bool validateAndCoerceConditionExpr(ParserContext *ctx, ExprAttr *conditionExpr, int line)
 {
-    if (conditionExpr == nullptr || conditionExpr->type == Type::UNKNOWN || conditionExpr->type == Type::STRING || conditionExpr->type == Type::VOID)
+    if (!conditionExpr || conditionExpr->type == Type::UNKNOWN || conditionExpr->type == Type::STRING || conditionExpr->type == Type::VOID)
     {
-        std::string actualType = (conditionExpr == nullptr) ? "unknown" : typeToString(conditionExpr->type);
+        std::string actualType = (!conditionExpr) ? "unknown" : typeToString(conditionExpr->type);
         ctx->errHandler->addSemanticError(
             line,
             "Invalid condition type '" + actualType + "' in conditional expression");
@@ -414,7 +414,6 @@ void beginFunctionDefinition(ParserContext *ctx,
     FunctionParamContext paramsCtx = ctx->currFunction.params;
     ctx->currFunction = CurrentFunctionContext(
         name,
-        returnType,
         paramsCtx,
         true,
         false,

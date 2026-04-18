@@ -75,13 +75,6 @@ struct ExprAttr
     bool *isUsed;
     ExprAttr(Type exprType, const std::string &exprPlace, bool isLvalue = false, bool isConst = false, bool *isUsed = nullptr) : type(exprType), place(exprPlace), isLvalue(isLvalue), isConst(isConst), isUsed(isUsed) {}
 };
-struct ParamList
-{
-    std::vector<Type> types;
-    std::vector<std::string> names;
-    std::vector<std::string> defaults;
-    std::vector<bool> isConst;
-};
 inline bool isNumericLike(Type type)
 {
     return type == Type::INT || type == Type::FLOAT ||

@@ -25,8 +25,6 @@ private:
 
     int switchDepth = 0;
 
-    std::string currentFunctionName;
-
     Type currentFunctionReturnType = Type::VOID;
 
     bool insideFunction = false;

@@ -51,30 +51,27 @@ struct FunctionParamContext
     std::vector<FunctionParamSpec> params;
     bool hasError;
     FunctionParamContext() : params(), hasError(false) {}
-    explicit FunctionParamContext(bool hasError) : params(), hasError(hasError) {}
 };
 
 struct CurrentFunctionContext
 {
     bool inFn;
     std::string name;
-    Type returnType = Type::VOID;
     FunctionParamContext params;
     bool isInvalid;
     bool isSuppressed;
     bool isInserted;
     int quadStart;
     CurrentFunctionContext()
-        : inFn(false), name(), returnType(Type::VOID), params(), isInvalid(false), isSuppressed(false), isInserted(false), quadStart(-1) {}
+        : inFn(false), name(), params(), isInvalid(false), isSuppressed(false), isInserted(false), quadStart(-1) {}
     CurrentFunctionContext(const std::string &name,
-                           Type returnType,
                            const FunctionParamContext &params,
                            bool inFn = false,
                            bool isInvalid = false,
                            bool isSuppressed = false,
                            bool isInserted = false,
                            int quadStart = -1)
-        : inFn(inFn), name(name), returnType(returnType), params(params), isInvalid(isInvalid), isSuppressed(isSuppressed), isInserted(isInserted), quadStart(quadStart) {}
+        : inFn(inFn), name(name), params(params), isInvalid(isInvalid), isSuppressed(isSuppressed), isInserted(isInserted), quadStart(quadStart) {}
 };
 
 struct ParserContext
@@ -85,7 +82,6 @@ struct ParserContext
     ErrorHandler *errHandler = nullptr;
     bool currDeclConst = false;
     Type currDeclType = Type::UNKNOWN;
-    int loopDepth = 0, switchDepth = 0;
     CurrentFunctionContext currFunction;
     std::vector<std::vector<ExprAttr>> passedArgs;
     std::vector<SwitchContext> switchContexts;

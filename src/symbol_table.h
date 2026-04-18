@@ -23,12 +23,10 @@ public:
     void LeaveScope();
     std::vector<Symbol> getUnusedSymbolsInCurrentScope();
     Symbol *lookup(const std::string &symbol_name);
-    Symbol *lookupCurrentScope(const std::string &symbol_name);
     bool removeCurrentScopeSymbol(const std::string &symbol_name);
     void removeCurrentScopeSymbols();
     void printSymbolTable();
     std::string getIRName(const std::string &symbol_name);
-    int getCurrentScopeLevel() const;
     const std::vector<std::pair<std::string, std::string>> &getRenameEvents() const;
 };
 

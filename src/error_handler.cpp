@@ -34,10 +34,6 @@ bool ErrorHandler::hasErrors() const
     }
     return false;
 }
-const std::multimap<std::pair<int, int>, CompilerError> &ErrorHandler::getErrors() const
-{
-    return errors;
-}
 void ErrorHandler::print() const
 {
     // Not Optimized

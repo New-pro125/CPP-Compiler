@@ -30,16 +30,6 @@ std::string QuadrupleGenerator::newLabel()
     this->labelCounter++;
     return "L" + std::to_string(labelCounter);
 }
-void QuadrupleGenerator::backpatch(std::vector<int> &indices, const std::string &label)
-{
-    for (int idx : indices)
-    {
-        if (idx >= 0 && idx < (int)quads.size())
-        {
-            quads[idx].result = label;
-        }
-    }
-}
 
 void QuadrupleGenerator::rollbackTo(int index)
 {
@@ -49,12 +39,6 @@ void QuadrupleGenerator::rollbackTo(int index)
         quads.resize((std::size_t)index);
 }
 
-std::vector<int> QuadrupleGenerator::merge(const std::vector<int> &left, const std::vector<int> &right) const
-{
-    std::vector<int> out(left.begin(), left.end());
-    out.insert(out.end(), right.begin(), right.end());
-    return out;
-}
 void QuadrupleGenerator::replaceNames(const std::vector<std::pair<std::string, std::string>> &renameEvents)
 {
     for (Quadruple &q : quads)
@@ -70,10 +54,7 @@ void QuadrupleGenerator::replaceNames(const std::vector<std::pair<std::string, s
         }
     }
 }
-const std::vector<Quadruple> &QuadrupleGenerator::getQuadraples() const
-{
-    return quads;
-}
+
 void QuadrupleGenerator::print() const
 {
     std::cout << "\nQuadruples\n";

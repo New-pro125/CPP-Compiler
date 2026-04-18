@@ -296,14 +296,13 @@ void SemanticAnalyzer::exitSwitch()
 void SemanticAnalyzer::setCurrentFunction(const std::string &name, Type returnType)
 {
     insideFunction = true;
-    currentFunctionName = name;
+    (void)name;
     currentFunctionReturnType = returnType;
 }
 
 void SemanticAnalyzer::clearCurrentFunction()
 {
     insideFunction = false;
-    currentFunctionName = "";
     currentFunctionReturnType = Type::VOID;
 }
 
