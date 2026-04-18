@@ -23,6 +23,7 @@ struct SwitchContext
     std::string dispatchLabel;
     std::string defaultLabel;
     std::vector<bool> skipCase;
+    bool isInvalid = false;
     SwitchContext() = default;
     SwitchContext(const std::string &exprPlace,
                   const std::string &dispatchLabel,
