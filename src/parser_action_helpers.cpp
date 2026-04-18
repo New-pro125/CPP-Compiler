@@ -687,6 +687,11 @@ char *beginSwitchStatement(ParserContext *ctx,
                                      dispatchLabel,
                                      "",
                                      validSwitchType ? switchExpr->type : Type::UNKNOWN);
+    ctx->switchContexts.back().isInvalid = !validSwitchType;
+    if (!validSwitchType)
+    {
+        ctx->quadGenerator->beginSuppression();
+    }
     ctx->quadGenerator->emit("JMP", "-", "-", dispatchLabel);
     delete switchExpr;
     return strdup(endLabel.c_str());
@@ -696,36 +701,46 @@ void endSwitchStatement(ParserContext *ctx,
                         const char *endLabel)
 {
     const std::string end(endLabel);
-    ctx->quadGenerator->emit("JMP", "-", "-", end);
-
     SwitchContext *switchCtx = currentSwitchContext(ctx);
-    std::string switchExpr;
-    if (switchCtx)
-    {
-        ctx->quadGenerator->emit("LABEL", switchCtx->dispatchLabel, "-", "-");
-        switchExpr = switchCtx->exprPlace;
-    }
+    const bool suppressSwitchIR = switchCtx && switchCtx->isInvalid;
 
-    if (switchCtx && !switchExpr.empty())
+    if (!suppressSwitchIR)
     {
-        for (const auto &entry : switchCtx->dispatchCases)
+        ctx->quadGenerator->emit("JMP", "-", "-", end);
+
+        std::string switchExpr;
+        if (switchCtx)
         {
-            std::string temp = ctx->quadGenerator->newTemp();
-            ctx->quadGenerator->emit("EQ", switchExpr, entry.literalPlace, temp);
-            ctx->quadGenerator->emit("JMP_TRUE", temp, "-", entry.caseLabel);
+            ctx->quadGenerator->emit("LABEL", switchCtx->dispatchLabel, "-", "-");
+            switchExpr = switchCtx->exprPlace;
         }
-    }
 
-    if (switchCtx && !switchCtx->defaultLabel.empty())
-    {
-        ctx->quadGenerator->emit("JMP", "-", "-", switchCtx->defaultLabel);
+        if (switchCtx && !switchExpr.empty())
+        {
+            for (const auto &entry : switchCtx->dispatchCases)
+            {
+                std::string temp = ctx->quadGenerator->newTemp();
+                ctx->quadGenerator->emit("EQ", switchExpr, entry.literalPlace, temp);
+                ctx->quadGenerator->emit("JMP_TRUE", temp, "-", entry.caseLabel);
+            }
+        }
+
+        if (switchCtx && !switchCtx->defaultLabel.empty())
+        {
+            ctx->quadGenerator->emit("JMP", "-", "-", switchCtx->defaultLabel);
+        }
+        else
+        {
+            ctx->quadGenerator->emit("JMP", "-", "-", end);
+        }
+
+        ctx->quadGenerator->emit("LABEL", end, "-", "-");
     }
     else
     {
-        ctx->quadGenerator->emit("JMP", "-", "-", end);
+        ctx->quadGenerator->endSuppression();
     }
 
-    ctx->quadGenerator->emit("LABEL", end, "-", "-");
     if (!ctx->breakLabels.empty())
     {
         ctx->breakLabels.pop_back();
