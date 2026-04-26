@@ -36,7 +36,6 @@ bool ErrorHandler::hasErrors() const
 }
 void ErrorHandler::print() const
 {
-    // Not Optimized
 
     for (const auto &[_, v] : this->errors)
     {

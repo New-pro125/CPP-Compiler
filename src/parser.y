@@ -116,6 +116,7 @@ decl
     : var_decl
     | func_decl
   | stmt
+  | error SEMICOLON  { yyerrok; }
     ;
 
 
@@ -134,6 +135,8 @@ var_decl
     | CONST type_spec
       { CTX->currDeclType = $2; CTX->currDeclConst = true; }
       declarator_list SEMICOLON
+    | type_spec declarator_list error               { yyerrok; }
+    | type_spec error SEMICOLON                     { yyerrok; }
     ;
 
 declarator_list
@@ -225,6 +228,7 @@ stmt
       yyerrok;
       yyclearin;
     }
+
   ;
 
 stmt_guard

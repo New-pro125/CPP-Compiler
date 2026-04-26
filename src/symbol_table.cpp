@@ -32,7 +32,6 @@ bool SymbolTable::insert(const std::string &symbol_name, Symbol sym)
         {
             if (symbolVersions[symbol_name] == 0)
             {
-                // Retroactively rename the original x to x@0 in the archive
                 for (Symbol &oldSym : archive)
                 {
                     if (!oldSym.isFunction && oldSym.name == symbol_name && oldSym.irName == oldSym.name)
