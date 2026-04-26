@@ -180,10 +180,10 @@ ExprAttr *makeCompoundAssignExpr(ParserContext *ctx,
             ctx->semAnalyzer->markExpressionAsRead(rhs);
             std::string temp = ctx->quadGenerator->newTemp();
             ctx->quadGenerator->emit(irOp, lhs.place, rhs.place, temp);
-            
+
             ExprAttr tempExpr(resultType, temp);
             ctx->semAnalyzer->coerce(tempExpr, origLhsType, line);
-            
+
             ctx->quadGenerator->emit("ASSIGN", tempExpr.place, "-", ctx->symTable->getIRName(name));
             auto *result = new ExprAttr(origLhsType, ctx->symTable->getIRName(name));
             return result;
@@ -260,12 +260,28 @@ ExprAttr *makeFunctionCallExpr(ParserContext *ctx,
     {
         return unknownExprFromName(fn);
     }
+    std::size_t emittedArgCount = 0;
     for (auto &arg : currentArgs)
     {
         ctx->quadGenerator->emit("PARAM", arg.place, "-", "-");
+        emittedArgCount++;
+    }
+
+    Symbol *callee = ctx->symTable->lookup(fn);
+    if (callee != nullptr && callee->isFunction)
+    {
+        for (std::size_t i = currentArgs.size(); i < callee->defaultValues.size(); i++)
+        {
+            if (callee->defaultValues[i].empty())
+            {
+                break;
+            }
+            ctx->quadGenerator->emit("PARAM", callee->defaultValues[i], "-", "-");
+            emittedArgCount++;
+        }
     }
     std::string quadResult = retType == Type::VOID ? "-" : ctx->quadGenerator->newTemp();
-    ctx->quadGenerator->emit("CALL", fn, std::to_string(currentArgs.size()), quadResult);
+    ctx->quadGenerator->emit("CALL", fn, std::to_string(emittedArgCount), quadResult);
     auto *result = new ExprAttr(retType, quadResult);
     return result;
 }
