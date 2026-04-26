@@ -1,0 +1,59 @@
+int add(int a, int b = 10)
+{
+    return a + b;
+}
+
+int mul(int a, int b)
+{
+    return a * b;
+}
+
+int main()
+{
+    int r = add(mul(2, 3), add(1));
+    return r;
+}
+
+/*
+
+Quadruples
+INDEX  OPERATOR    ARG1        ARG2        RESULT
+-------------------------------------------------------
+1      FUNC_BEGIN  add         -           -
+2      ADD         a@0         b@0         t1
+3      RETURN      t1          -           -
+4      FUNC_END    add         -           -
+5      FUNC_BEGIN  mul         -           -
+6      MUL         a@1         b@1         t2
+7      RETURN      t2          -           -
+8      FUNC_END    mul         -           -
+9      FUNC_BEGIN  main        -           -
+10     PARAM       2           -           -
+11     PARAM       3           -           -
+12     CALL        mul         2           t3
+13     PARAM       1           -           -
+14     PARAM       10          -           -
+15     CALL        add         1           t4
+16     PARAM       t3          -           -
+17     PARAM       t4          -           -
+18     CALL        add         2           t5
+19     ASSIGN      t5          -           r
+20     RETURN      r           -           -
+21     FUNC_END    main        -           -
+______________________________
+
+Symbol Table
+Name                Type      Scope   Const   Init    Used    Func    Line
+------------------------------------------------------------------------------
+add                 int       0       no      yes     yes     yes     1
+Return: int| Params: int a, int b = 10
+a@0                 int       1       no      yes     yes     no      1
+b@0                 int       1       no      yes     yes     no      1
+mul                 int       0       no      yes     yes     yes     6
+Return: int| Params: int a, int b
+a@1                 int       1       no      yes     yes     no      6
+b@1                 int       1       no      yes     yes     no      6
+main                int       0       no      yes     no      yes     11
+Return: int| Params:
+r                   int       1       no      yes     yes     no      13
+*/

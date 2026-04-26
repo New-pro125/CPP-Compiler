@@ -1,0 +1,35 @@
+int main()
+{
+    float f = 3.14;
+    string s = "A";
+    int x = 1;
+
+    switch (f)
+    {
+    case 1:
+        x = 2;
+        break;
+    }
+
+    switch (x)
+    {
+    case "z":
+        x = 3;
+        break;
+    case 2.5:
+        x = 4;
+        break;
+    default:
+        x = 5;
+        break;
+    }
+
+    switch (s)
+    {
+    case 1:
+        x = 6;
+        break;
+    }
+
+    return x;
+}

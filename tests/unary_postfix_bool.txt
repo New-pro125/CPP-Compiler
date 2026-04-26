@@ -1,0 +1,8 @@
+int main(){
+bool t = false;
+string x = "de";
+
+t++;
+++x;
+return 0;
+}

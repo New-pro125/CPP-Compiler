@@ -1,0 +1,20 @@
+int x = 0;
+float y = 0;
+char z = 'a';
+string d = "Hello,World!";
+float k = 0.9;
+bool flag = true;
+void func(int a)
+{
+  int b = a + 5;
+  return;
+}
+int func2(int c)
+{
+  return c + 7;
+}
+int main(){
+func(x);
+int u = func2(k);
+return 0;
+}

@@ -1,0 +1,12 @@
+int f(int a, int b, int c = 7)
+{
+    return a + b + c;
+}
+
+int main()
+{
+    int x = f(1,2);
+    int y = f(1, 2, 3, 4);
+    int z = ~x;
+    return x + z;
+}

@@ -1,0 +1,17 @@
+int main() {
+int val = 2;
+switch (val)
+{
+case 1:
+case 2:
+{
+    int x = 10;
+    break;
+}
+default:
+{
+    int y = 20;
+}
+}
+return 0;
+}

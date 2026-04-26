@@ -1,0 +1,6 @@
+char nl = '\n';
+char tab = '\t';
+char quote = '\'';
+
+float pi = 3.14159265;
+float tiny = 0.00000012;

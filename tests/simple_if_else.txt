@@ -1,0 +1,12 @@
+int main() {
+int x = 8;
+if (x == 8)
+{
+    x = 7;
+}
+else
+{
+    x = 9;
+}
+return 0;
+}

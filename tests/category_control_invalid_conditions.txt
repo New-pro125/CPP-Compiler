@@ -1,0 +1,31 @@
+int main()
+{
+    string s = "x";
+
+    if (s) { }
+    while (s) { break; }
+    do { s = "y"; } while (s);
+    for (int i = 0; s; i = i + 1) { break; }
+    return 0;
+}
+/*
+Semantic Error at Line 5: Invalid condition type 'string' in conditional expression
+Semantic Error at Line 6: Invalid condition type 'string' in conditional expression
+Semantic Error at Line 7: Invalid condition type 'string' in conditional expression
+Semantic Error at Line 8: Invalid condition type 'string' in conditional expression
+_____________________________
+
+Quadruples
+INDEX  OPERATOR    ARG1        ARG2        RESULT
+------------------------------------------------
+1      FUNC_BEGIN  main        -           -
+2      ASSIGN      "x"         -           s
+3      RETURN      0           -           -
+4      FUNC_END    main        -           -
+Symbol Table
+Name                Type      Scope   Const   Init    Used    Func    Line
+------------------------------------------------------------------------------
+main                int       0       no      yes     no      yes     1
+Return: int| Params:
+s                   string    1       no      yes     yes     no      3
+*/

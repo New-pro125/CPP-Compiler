@@ -1,0 +1,5 @@
+int main() {
+int x = 0;
+string c = "de";
+int y = x + c;
+}

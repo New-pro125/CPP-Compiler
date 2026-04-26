@@ -1,0 +1,12 @@
+const float x;
+int y = x + 5;
+char z = 'c';
+z = 'd';
+// if (z == 'd')
+// {
+//     z = 'e';
+// }
+// else
+// {
+//     z = 'f';
+// }

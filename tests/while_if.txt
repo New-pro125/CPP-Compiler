@@ -1,0 +1,13 @@
+int main(){
+int m = 0;
+while (m == 0)
+{
+    int m = 1;
+    if (m == 1)
+    {
+        int m = 2;
+    }
+    m = 3;
+}
+return 0;
+}

@@ -1,0 +1,9 @@
+int main(){
+int v = 1;
+while (v < 10)
+{
+    int v = 5;
+}
+v = 2;
+return 0;
+}

@@ -1,0 +1,13 @@
+int main() {
+int a = 8;
+int b = 9;
+int temp = 0; // remove triggers semantic error at line 9
+while (b != 0)
+{
+    int temp = b;
+    b = a % b;
+    a = temp;
+}
+temp = 9;
+return 0;
+}

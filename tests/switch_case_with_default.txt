@@ -1,0 +1,22 @@
+int main(){
+int x = 8;
+int z = 0;
+switch (x)
+{
+case 5:
+    x = 7;
+    break;
+case 9:
+    x = 8;
+    break;
+case 1:
+    int y = 0;
+    x = y + 8;
+    break;
+default:
+    int z = x + 1;
+    x = z + 8;
+    break;
+}
+return 0;
+}

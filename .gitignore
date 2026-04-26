@@ -1,4 +1,4 @@
-tests/
+
 lex.yy.c
 parser
 parser.tab.*

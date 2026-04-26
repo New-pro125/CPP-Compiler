@@ -1,0 +1,6 @@
+const string b = "Hello,World!";
+int main() {
+  b = "Ahmed";
+  return 0;
+}
+

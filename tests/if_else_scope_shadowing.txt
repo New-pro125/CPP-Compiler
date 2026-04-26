@@ -1,0 +1,49 @@
+int main() {
+int x = 5;
+if (x > 3)
+{
+    int x = 10;
+    x = x + 1;
+}
+else
+{
+    int x = 20;
+    x = x + 2;
+}
+x = x + 100;
+return 0;
+}
+
+/*
+
+Quadruples
+INDEX  OPERATOR    ARG1        ARG2        RESULT
+-------------------------------------------------------
+1      FUNC_BEGIN  main        -           -
+2      ASSIGN      5           -           x@0
+3      GT          x@0         3           t1
+4      JMP_FALSE   t1          -           L1
+5      ASSIGN      10          -           x@1
+6      ADD         x@1         1           t2
+7      ASSIGN      t2          -           x@1
+8      JMP         -           -           L2
+9      LABEL       L1          -           -
+10     ASSIGN      20          -           x@2
+11     ADD         x@2         2           t3
+12     ASSIGN      t3          -           x@2
+13     LABEL       L2          -           -
+14     ADD         x@0         100         t4
+15     ASSIGN      t4          -           x@0
+16     RETURN      0           -           -
+17     FUNC_END    main        -           -
+______________________________
+
+Symbol Table
+Name                Type      Scope   Const   Init    Used    Func    Line
+------------------------------------------------------------------------------
+main                int       0       no      yes     no      yes     1
+Return: int| Params:
+x@0                 int       1       no      yes     yes     no      2
+x@1                 int       2       no      yes     yes     no      5
+x@2                 int       2       no      yes     yes     no      10
+*/

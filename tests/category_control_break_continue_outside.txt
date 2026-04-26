@@ -1,0 +1,7 @@
+break;
+continue;
+
+int main()
+{
+    return 0;
+}
