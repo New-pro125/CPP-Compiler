@@ -1,0 +1,27 @@
+void func(){
+    int x = 0, y = 0;
+    for (int i = 0;i<7;i++){
+        int x = i;
+        y += x;
+    }
+}
+string concat(string a, string b){
+    return a + b;
+}
+
+float add_half(float x, float y = 0.5){
+    return x + y;
+}
+int gcd(int a, int b) {
+    if (b == 0){
+        return a;
+    }
+    return gcd(b, a%b);
+}
+int main() {
+    string res = concat("b","c");
+    int result = gcd(10,4);
+    float resu = add_half(4);
+    func();
+    return 0;
+}

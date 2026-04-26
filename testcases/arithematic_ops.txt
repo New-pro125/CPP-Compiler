@@ -1,4 +1,7 @@
 int main() {
+    int a, g, f;
+    a = g = f = 42;
+    a += g -= f *= 2;
     float y = 5.25;
     int x = 8;
     int z = 7;

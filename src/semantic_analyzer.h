@@ -31,7 +31,7 @@ private:
 
 public:
     SemanticAnalyzer(SymbolTable *st, QuadrupleGenerator *qg, ErrorHandler *eh);
-    Type checkBinaryOper(const ExprAttr &left, const ExprAttr &right, const std::string &op, int line);
+    Type checkBinaryOper(ExprAttr &left, ExprAttr &right, const std::string &op, int line);
     Type checkUnaryOper(const ExprAttr &expr, const std::string &op, int line);
     bool coerce(ExprAttr &expr, Type targetType, int line);
     bool validateAssignment(ExprAttr rhs, Type lhsType, int line);

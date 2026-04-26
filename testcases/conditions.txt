@@ -1,0 +1,39 @@
+int main(){ 
+    int sum = 0;
+    for (int i = 0; i < 10; ++i)
+    {
+        if (i == 5)
+        {
+            continue;
+        }
+        else if (i == 8)
+        {
+            break;
+        }
+        sum = sum + i;
+    }
+    int k = 0;
+    do
+    {
+        int j = 10;
+        do
+        {
+            j = j - 1;
+        } while (j > 5);
+        k = k + 1;
+    } while (k < 3);
+    int x = 5;
+    if (x > 3)
+    {
+        int x = 10;
+        x = x + 1;
+    }
+    else
+    {
+        int x = 20;
+        x = x + 2;
+    }
+    x = x + 100;
+    return 0;
+    
+}

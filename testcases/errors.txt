@@ -80,10 +80,9 @@ int main(){
   x = m + 1;
 
   int n = 20
-  if (x > 5) {
-    x = 100;
-  }
+  if(s){
 
+  }
   int = 42;
 
 

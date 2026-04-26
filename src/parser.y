@@ -181,6 +181,8 @@ param_list_opt
 param_list
     : param_list COMMA param_decl
     | param_decl
+    | error COMMA param_decl { yyerrok; }
+    | param_list COMMA error { yyerrok; }
     ;
 
 param_decl
@@ -271,6 +273,10 @@ compound_stmt
       {
       leaveScopeWithUnusedWarnings(CTX);
       }
+    | LBRACE error RBRACE
+      {
+          yyerrok;
+      }
     ;
 
 
@@ -279,6 +285,11 @@ compound_stmt_func
       {
       leaveScopeWithUnusedWarnings(CTX);
       }
+    | LBRACE error RBRACE
+      {
+          yyerrok;
+          leaveScopeWithUnusedWarnings(CTX);
+      }
     ;
 
 
@@ -286,6 +297,11 @@ if_condition_prefix
     : IF LPARENTHESIS expr RPARENTHESIS
       {
           $$ = beginIfCondition(CTX, $3,yylineno);
+      }
+    | IF LPARENTHESIS error RPARENTHESIS
+      {
+          $$ = beginIfCondition(CTX, new ExprAttr(Type::BOOL, "true"), yylineno);
+          yyerrok;
       }
     ;
 
@@ -323,6 +339,10 @@ while_stmt
       endWhileLoop(CTX, $<sval>2);
           free($<sval>2);
       }
+    | WHILE LPARENTHESIS error RPARENTHESIS stmt
+      {
+          yyerrok;
+      }
     ;
 
 
@@ -339,6 +359,10 @@ do_while_stmt
       {
       endDoWhileLoop(CTX, $<sval>2, $7,yylineno);
           free($<sval>2);
+      }
+    | DO stmt WHILE LPARENTHESIS error RPARENTHESIS SEMICOLON
+      {
+          yyerrok;
       }
     ;
 
@@ -362,6 +386,10 @@ for_stmt
       {
       endForLoop(CTX, $<sval>6);
           free($<sval>6);
+      }
+    | FOR LPARENTHESIS error RPARENTHESIS stmt
+      {
+          yyerrok;
       }
     ;
 
@@ -401,6 +429,16 @@ switch_stmt
           endSwitchStatement(CTX, $<sval>5);
           free($<sval>5);
       }
+    | SWITCH LPARENTHESIS error RPARENTHESIS
+      {
+          $<sval>$ = beginSwitchStatement(CTX, new ExprAttr(Type::INT, "0"), yylineno);
+          yyerrok;
+      }
+      LBRACE case_list RBRACE
+      {
+          endSwitchStatement(CTX, $<sval>5);
+          free($<sval>5);
+      }
     ;
 
 case_list
@@ -423,6 +461,15 @@ case_item
       }
       stmt_list {
         endCaseOrDefaultClause(CTX);
+      }
+    | CASE error COLON
+      {
+          beginCaseClause(CTX, new ExprAttr(Type::INT, "0"), yylineno);
+          yyerrok;
+      }
+      stmt_list
+      {
+          endCaseOrDefaultClause(CTX);
       }
     ;
 
@@ -707,6 +754,11 @@ primary_expr
       }
     | literal { $$ = $1; }
     | LPARENTHESIS expr RPARENTHESIS { $$ = $2; }
+    | LPARENTHESIS error RPARENTHESIS 
+      { 
+          $$ = new ExprAttr(Type::UNKNOWN, "0");
+          yyerrok;
+      }
     ;
 
 literal

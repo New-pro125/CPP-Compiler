@@ -172,6 +172,7 @@ ExprAttr *makeCompoundAssignExpr(ParserContext *ctx,
     if (isAssignable)
     {
         ExprAttr lhs = ctx->semAnalyzer->resolveIdentifier(name, line);
+        Type origLhsType = lhs.type;
         Type resultType = ctx->semAnalyzer->checkBinaryOper(lhs, rhs, semanticOp, line);
         if (resultType != Type::UNKNOWN)
         {
@@ -179,8 +180,12 @@ ExprAttr *makeCompoundAssignExpr(ParserContext *ctx,
             ctx->semAnalyzer->markExpressionAsRead(rhs);
             std::string temp = ctx->quadGenerator->newTemp();
             ctx->quadGenerator->emit(irOp, lhs.place, rhs.place, temp);
-            ctx->quadGenerator->emit("ASSIGN", temp, "-", lhs.place);
-            auto *result = new ExprAttr(resultType, ctx->symTable->getIRName(name));
+            
+            ExprAttr tempExpr(resultType, temp);
+            ctx->semAnalyzer->coerce(tempExpr, origLhsType, line);
+            
+            ctx->quadGenerator->emit("ASSIGN", tempExpr.place, "-", ctx->symTable->getIRName(name));
+            auto *result = new ExprAttr(origLhsType, ctx->symTable->getIRName(name));
             return result;
         }
     }
