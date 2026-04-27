@@ -2,6 +2,7 @@
 #define TYPES_H
 #include <string>
 #include <vector>
+using namespace std;
 enum class Type
 {
     INT,
@@ -14,8 +15,8 @@ enum class Type
 };
 struct Symbol
 {
-    std::string name;
-    std::string irName;
+    string name;
+    string irName;
     Type dataType = Type::UNKNOWN;
     bool isConst = false;
     bool isInitialized = false;
@@ -24,12 +25,12 @@ struct Symbol
     bool isRemoved = false;
     int declaredLine = -1;
     int scopeLevel = 0;
-    std::vector<Type> paramTypes;
-    std::vector<std::string> paramNames;
-    std::vector<std::string> defaultValues;
+    vector<Type> paramTypes;
+    vector<string> paramNames;
+    vector<string> defaultValues;
     Type returnType = Type::VOID;
-    Symbol(const std::string &name,
-           const std::string &irName,
+    Symbol(const string &name,
+           const string &irName,
            Type dataType = Type::UNKNOWN,
            bool isConst = false,
            bool isInitialized = false,
@@ -45,7 +46,7 @@ struct Symbol
     {
     }
 };
-inline std::string typeToString(Type type)
+inline string typeToString(Type type)
 {
     switch (type)
     {
@@ -69,11 +70,11 @@ inline std::string typeToString(Type type)
 struct ExprAttr
 {
     Type type = Type::UNKNOWN;
-    std::string place;
+    string place;
     bool isLvalue;
     bool isConst;
     bool *isUsed;
-    ExprAttr(Type exprType, const std::string &exprPlace, bool isLvalue = false, bool isConst = false, bool *isUsed = nullptr) : type(exprType), place(exprPlace), isLvalue(isLvalue), isConst(isConst), isUsed(isUsed) {}
+    ExprAttr(Type exprType, const string &exprPlace, bool isLvalue = false, bool isConst = false, bool *isUsed = nullptr) : type(exprType), place(exprPlace), isLvalue(isLvalue), isConst(isConst), isUsed(isUsed) {}
 };
 inline bool isNumericLike(Type type)
 {

@@ -8,26 +8,26 @@
 
 struct SwitchCaseDispatch
 {
-    std::string literalPlace;
-    std::string caseLabel;
+    string literalPlace;
+    string caseLabel;
     SwitchCaseDispatch() = default;
-    SwitchCaseDispatch(const std::string &literalPlace, const std::string &caseLabel)
+    SwitchCaseDispatch(const string &literalPlace, const string &caseLabel)
         : literalPlace(literalPlace), caseLabel(caseLabel) {}
 };
 
 struct SwitchContext
 {
-    std::string exprPlace;
+    string exprPlace;
     Type exprType = Type::UNKNOWN;
-    std::vector<SwitchCaseDispatch> dispatchCases;
-    std::string dispatchLabel;
-    std::string defaultLabel;
-    std::vector<bool> skipCase;
+    vector<SwitchCaseDispatch> dispatchCases;
+    string dispatchLabel;
+    string defaultLabel;
+    vector<bool> skipCase;
     bool isInvalid = false;
     SwitchContext() = default;
-    SwitchContext(const std::string &exprPlace,
-                  const std::string &dispatchLabel,
-                  const std::string &defaultLabel = "",
+    SwitchContext(const string &exprPlace,
+                  const string &dispatchLabel,
+                  const string &defaultLabel = "",
                   Type exprType = Type::UNKNOWN)
         : exprPlace(exprPlace), exprType(exprType), dispatchCases(), dispatchLabel(dispatchLabel), defaultLabel(defaultLabel), skipCase() {}
 };
@@ -35,12 +35,12 @@ struct SwitchContext
 struct FunctionParamSpec
 {
     Type dataType;
-    std::string name;
-    std::string defaultValue;
+    string name;
+    string defaultValue;
     bool isConst;
     FunctionParamSpec() : dataType(Type::UNKNOWN), name(), defaultValue(), isConst(false) {}
-    FunctionParamSpec(const std::string &name,
-                      const std::string &defaultValue,
+    FunctionParamSpec(const string &name,
+                      const string &defaultValue,
                       Type dataType = Type::UNKNOWN,
                       bool isConst = false)
         : dataType(dataType), name(name), defaultValue(defaultValue), isConst(isConst) {}
@@ -48,7 +48,7 @@ struct FunctionParamSpec
 
 struct FunctionParamContext
 {
-    std::vector<FunctionParamSpec> params;
+    vector<FunctionParamSpec> params;
     bool hasError;
     FunctionParamContext() : params(), hasError(false) {}
 };
@@ -56,7 +56,7 @@ struct FunctionParamContext
 struct CurrentFunctionContext
 {
     bool inFn;
-    std::string name;
+    string name;
     FunctionParamContext params;
     bool isInvalid;
     bool isSuppressed;
@@ -64,7 +64,7 @@ struct CurrentFunctionContext
     int quadStart;
     CurrentFunctionContext()
         : inFn(false), name(), params(), isInvalid(false), isSuppressed(false), isInserted(false), quadStart(-1) {}
-    CurrentFunctionContext(const std::string &name,
+    CurrentFunctionContext(const string &name,
                            const FunctionParamContext &params,
                            bool inFn = false,
                            bool isInvalid = false,
@@ -83,9 +83,9 @@ struct ParserContext
     bool currDeclConst = false;
     Type currDeclType = Type::UNKNOWN;
     CurrentFunctionContext currFunction;
-    std::vector<std::vector<ExprAttr>> passedArgs;
-    std::vector<SwitchContext> switchContexts;
-    std::vector<std::string> breakLabels, continueLabels;
+    vector<vector<ExprAttr>> passedArgs;
+    vector<SwitchContext> switchContexts;
+    vector<string> breakLabels, continueLabels;
 };
 extern ParserContext *parserContext;
 #endif

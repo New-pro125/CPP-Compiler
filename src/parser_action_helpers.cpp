@@ -43,8 +43,8 @@ namespace
     DoWhileLabels unpackDoWhileLabels(const char *packed)
     {
         std::string labels = packed ? packed : "";
-        std::size_t p1 = labels.find(',');
-        std::size_t p2 = labels.find(',', p1 == std::string::npos ? 0 : p1 + 1);
+        int p1 = labels.find(',');
+        int p2 = labels.find(',', p1 == std::string::npos ? 0 : p1 + 1);
         if (p1 == std::string::npos || p2 == std::string::npos)
         {
             return DoWhileLabels{};
@@ -57,9 +57,9 @@ namespace
     ForLabels unpackForLabels(const char *packed)
     {
         std::string labels = packed ? packed : "";
-        std::size_t p1 = labels.find(',');
-        std::size_t p2 = labels.find(',', p1 == std::string::npos ? 0 : p1 + 1);
-        std::size_t p3 = labels.find(',', p2 == std::string::npos ? 0 : p2 + 1);
+        int p1 = labels.find(',');
+        int p2 = labels.find(',', p1 == std::string::npos ? 0 : p1 + 1);
+        int p3 = labels.find(',', p2 == std::string::npos ? 0 : p2 + 1);
         if (p1 == std::string::npos || p2 == std::string::npos || p3 == std::string::npos)
         {
             return ForLabels{};
@@ -183,7 +183,6 @@ ExprAttr *makeCompoundAssignExpr(ParserContext *ctx,
 
             ExprAttr tempExpr(resultType, temp);
             ctx->semAnalyzer->coerce(tempExpr, origLhsType, line);
-
             ctx->quadGenerator->emit("ASSIGN", tempExpr.place, "-", ctx->symTable->getIRName(name));
             auto *result = new ExprAttr(origLhsType, ctx->symTable->getIRName(name));
             return result;
@@ -260,7 +259,7 @@ ExprAttr *makeFunctionCallExpr(ParserContext *ctx,
     {
         return unknownExprFromName(fn);
     }
-    std::size_t emittedArgCount = 0;
+    int emittedArgCount = 0;
     for (auto &arg : currentArgs)
     {
         ctx->quadGenerator->emit("PARAM", arg.place, "-", "-");
@@ -270,12 +269,12 @@ ExprAttr *makeFunctionCallExpr(ParserContext *ctx,
     Symbol *callee = ctx->symTable->lookup(fn);
     if (callee != nullptr && callee->isFunction)
     {
-        for (std::size_t i = currentArgs.size(); i < callee->defaultValues.size(); i++)
+        for (int i = currentArgs.size(); i < callee->defaultValues.size(); i++)
         {
-            if (callee->defaultValues[i].empty())
-            {
-                break;
-            }
+            // if (callee->defaultValues[i].empty())
+            // {
+            //     break;
+            // }
             ctx->quadGenerator->emit("PARAM", callee->defaultValues[i], "-", "-");
             emittedArgCount++;
         }
@@ -444,7 +443,7 @@ void beginFunctionDefinition(ParserContext *ctx,
     const auto &params = ctx->currFunction.params.params;
 
     bool sawDefault = false;
-    for (std::size_t i = 0; i < params.size(); i++)
+    for (int i = 0; i < params.size(); i++)
     {
         if (!params[i].defaultValue.empty())
         {
@@ -456,13 +455,9 @@ void beginFunctionDefinition(ParserContext *ctx,
                 line,
                 "Missing default argument on Parameter '" + params[i].name + "'");
             ctx->currFunction.params.hasError = true;
+            markCurrentFunctionInvalid(ctx);
             break;
         }
-    }
-
-    if (ctx->currFunction.params.hasError)
-    {
-        markCurrentFunctionInvalid(ctx);
     }
 
     if (!ctx->currFunction.isInvalid)
@@ -485,7 +480,7 @@ void beginFunctionDefinition(ParserContext *ctx,
         }
     }
 
-    ctx->semAnalyzer->setCurrentFunction(name, returnType);
+    ctx->semAnalyzer->setCurrentFunction(returnType);
     if (!ctx->currFunction.isInvalid)
         ctx->quadGenerator->emit("FUNC_BEGIN", name, "-", "-");
     ctx->symTable->addScope();

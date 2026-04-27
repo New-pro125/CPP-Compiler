@@ -1,0 +1,13 @@
+// case 1
+string rename(string name){
+    return "mr."+name;
+}
+void println(string name=rename("ahmed")){
+    return;
+}
+int main(){
+    /*
+        This project is insane
+    */
+    return 0;
+}

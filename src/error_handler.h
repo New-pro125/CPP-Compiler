@@ -2,7 +2,7 @@
 #define ERROR_HANDLER_H
 #include <map>
 #include <string>
-
+using namespace std;
 enum ErrorType
 {
     Warning = 0,
@@ -12,19 +12,19 @@ enum ErrorType
 struct CompilerError
 {
     int line = -1;
-    std::string message;
+    string message;
     ErrorType errorType = ErrorType::Warning;
 };
 
 class ErrorHandler
 {
 private:
-    std::multimap<std::pair<int, int>, CompilerError> errors;
+    multimap<pair<int, int>, CompilerError> errors;
 
 public:
-    void addSyntaxError(int line, const std::string &msg);
-    void addSemanticError(int line, const std::string &msg);
-    void addWarning(int line, const std::string &msg);
+    void addSyntaxError(int line, const string &msg);
+    void addSemanticError(int line, const string &msg);
+    void addWarning(int line, const string &msg);
     bool hasErrors() const;
     void print() const;
 };

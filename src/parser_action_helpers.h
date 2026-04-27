@@ -1,6 +1,6 @@
 #ifndef PARSER_ACTION_HELPERS_H
 #define PARSER_ACTION_HELPERS_H
-
+using namespace std;
 #include <string>
 #include "types.h"
 
@@ -9,8 +9,8 @@ struct ParserContext;
 ExprAttr *makeBinaryExpr(ParserContext *ctx,
                          ExprAttr *lhs,
                          ExprAttr *rhs,
-                         const std::string &semanticOp,
-                         const std::string &irOp,
+                         const string &semanticOp,
+                         const string &irOp,
                          int line);
 
 ExprAttr *makeAssignExpr(ParserContext *ctx,
@@ -21,20 +21,20 @@ ExprAttr *makeAssignExpr(ParserContext *ctx,
 ExprAttr *makeCompoundAssignExpr(ParserContext *ctx,
                                  const char *identifier,
                                  ExprAttr *rhsExpr,
-                                 const std::string &semanticOp,
-                                 const std::string &irOp,
+                                 const string &semanticOp,
+                                 const string &irOp,
                                  int line);
 
 ExprAttr *makeIncDecExpr(ParserContext *ctx,
                          const char *identifier,
-                         const std::string &op,
+                         const string &op,
                          int line,
                          bool isPostfix = true);
 
 ExprAttr *makeUnaryExpr(ParserContext *ctx,
                         ExprAttr *operand,
-                        const std::string &semanticOp,
-                        const std::string &irOp,
+                        const string &semanticOp,
+                        const string &irOp,
                         int line);
 
 ExprAttr *makeFunctionCallExpr(ParserContext *ctx,
@@ -61,7 +61,7 @@ void resetFunctionParamContext(ParserContext *ctx);
 void addFunctionParam(ParserContext *ctx,
                       Type paramType,
                       const char *paramName,
-                      const std::string &defaultValue,
+                      const string &defaultValue,
                       bool isConst = false,
                       int line = -1);
 

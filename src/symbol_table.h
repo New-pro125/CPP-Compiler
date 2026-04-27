@@ -5,29 +5,30 @@
 #include <queue>
 #include <unordered_map>
 #include "types.h"
+using namespace std;
 
 class SymbolTable
 {
 
 private:
-    std::vector<std::unordered_map<std::string, Symbol *>> scopes;
-    std::deque<Symbol> archive;
+    vector<unordered_map<string, Symbol *>> scopes;
+    deque<Symbol> archive;
     int currentScopeLevel;
-    std::unordered_map<std::string, int> symbolVersions;
-    std::vector<std::pair<std::string, std::string>> renameEvents;
+    unordered_map<string, int> symbolVersions;
+    vector<pair<string, string>> renameEvents;
 
 public:
     SymbolTable();
-    bool insert(const std::string &symbol_name, Symbol sym);
+    bool insert(const string &symbol_name, Symbol sym);
     void addScope();
     void LeaveScope();
-    std::vector<Symbol> getUnusedSymbolsInCurrentScope();
-    Symbol *lookup(const std::string &symbol_name);
-    bool removeCurrentScopeSymbol(const std::string &symbol_name);
+    vector<Symbol> getUnusedSymbolsInCurrentScope();
+    Symbol *lookup(const string &symbol_name);
+    bool removeCurrentScopeSymbol(const string &symbol_name);
     void removeCurrentScopeSymbols();
     void printSymbolTable();
-    std::string getIRName(const std::string &symbol_name);
-    const std::vector<std::pair<std::string, std::string>> &getRenameEvents() const;
+    string getIRName(const string &symbol_name);
+    const vector<pair<string, string>> &getRenameEvents() const;
 };
 
 #endif

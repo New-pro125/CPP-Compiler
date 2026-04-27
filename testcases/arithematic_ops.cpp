@@ -1,5 +1,7 @@
-int main() {
+int main()
+{
     int a, g, f;
+    const int c1 = 1, c2 = 2;
     a = g = f = 42;
     a += g -= f *= 2;
     float y = 5.25;
@@ -7,16 +9,16 @@ int main() {
     int z = 7;
     char c = 'a';
     bool tr = true;
-    x +=y;
-    x -=y;
-    x *=y;
-    x /=y;
-    x %=z;
-    x <<=z;
-    x >>=z;
-    x |=z;
-    x &=z;
-    x ^=z;
+    x += y;
+    x -= y;
+    x *= y;
+    x /= y;
+    x %= z;
+    x <<= z;
+    x >>= z;
+    x |= z;
+    x &= z;
+    x ^= z;
     x = x + c;
     x = x - 8;
     x = x * 9;
@@ -28,17 +30,20 @@ int main() {
     x = x & c;
     x = x ^ 9;
     string w = "g";
-    string v = "d" + "e";
     x++;
     ++x;
     x--;
     --x;
     bool b = x > 8;
     b = x < 8;
+    b = x <= 8;
+    b = x >= 8;
     b = x == 0;
-    b = x!= 6;
+    b = x != 6;
     b = x == 0 && x != 7;
-    b = x !=8 || x < 8;
+    b = x != 8 || x < 8;
+    bool flat = w == "y";
     int u = ~x;
     bool bc = !tr;
+    int neg = -(x + 1);
 }

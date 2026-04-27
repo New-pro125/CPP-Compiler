@@ -1,4 +1,5 @@
-int main(){ 
+int main()
+{
     int sum = 0;
     for (int i = 0; i < 10; ++i)
     {
@@ -15,11 +16,6 @@ int main(){
     int k = 0;
     do
     {
-        int j = 10;
-        do
-        {
-            j = j - 1;
-        } while (j > 5);
         k = k + 1;
     } while (k < 3);
     int x = 5;
@@ -34,6 +30,20 @@ int main(){
         x = x + 2;
     }
     x = x + 100;
+    while (k < 5)
+    {
+        k = k + 1;
+    }
+    switch (x)
+    {
+    case 1:
+        sum = sum + 1;
+    case 5:
+        sum = sum + 5;
+        break;
+    default:
+        sum = sum + 10;
+        break;
+    }
     return 0;
-    
 }

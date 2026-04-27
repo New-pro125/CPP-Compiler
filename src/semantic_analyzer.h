@@ -14,8 +14,8 @@ private:
     SymbolTable *symTable;
     QuadrupleGenerator *quadGen;
     ErrorHandler *errorHandler;
-    std::vector<std::unordered_set<std::string>> switchCaseLabel;
-    std::vector<bool> switchHasDefault;
+    vector<unordered_set<string>> switchCaseLabel;
+    vector<bool> switchHasDefault;
 
     int typeRank(Type t) const;
     Type promoteType(Type a, Type b) const;
@@ -31,16 +31,16 @@ private:
 
 public:
     SemanticAnalyzer(SymbolTable *st, QuadrupleGenerator *qg, ErrorHandler *eh);
-    Type checkBinaryOper(ExprAttr &left, ExprAttr &right, const std::string &op, int line);
-    Type checkUnaryOper(const ExprAttr &expr, const std::string &op, int line);
+    Type checkBinaryOper(ExprAttr &left, ExprAttr &right, const string &op, int line);
+    Type checkUnaryOper(const ExprAttr &expr, const string &op, int line);
     bool coerce(ExprAttr &expr, Type targetType, int line);
     bool validateAssignment(ExprAttr rhs, Type lhsType, int line);
-    ExprAttr resolveIdentifier(const std::string &symbol_name, int line);
+    ExprAttr resolveIdentifier(const string &symbol_name, int line);
     void markExpressionAsRead(const ExprAttr &expr);
-    void markArgumentsAsRead(const std::vector<ExprAttr> &args);
-    Type validateFunctionCall(const std::string &name, std::vector<ExprAttr> &args, int line);
+    void markArgumentsAsRead(const vector<ExprAttr> &args);
+    Type validateFunctionCall(const string &name, vector<ExprAttr> &args, int line);
     bool validateReturn(Type expected, ExprAttr *value, int line);
-    bool checkAssignable(const std::string &name, int line);
+    bool checkAssignable(const string &name, int line);
     bool validateBreak(int line);
     bool validateContinue(int line);
     void enterSwitchContext();
@@ -53,7 +53,7 @@ public:
     void endSwitchCaseTracking();
     bool validateCaseLabel(const ExprAttr &label, int line);
     bool validateDefaultLabel(int line);
-    void setCurrentFunction(const std::string &name, Type returnType);
+    void setCurrentFunction(Type returnType);
     void clearCurrentFunction();
     Type getCurrentFunctionReturnType() const;
 };

@@ -2,13 +2,13 @@
 #define QUADRAPLE_H
 
 #include <string>
-
+using namespace std;
 struct Quadruple
 {
-    std::string oper;
-    std::string arg1;
-    std::string arg2;
-    std::string result;
+    string oper;
+    string arg1;
+    string arg2;
+    string result;
 };
 
 #endif

@@ -196,14 +196,14 @@ param_decl
           addFunctionParam(CTX, $2, $3, "", true, yylineno);
           free($3);
       }
-    | type_spec IDENTIFIER ASSIGN literal
+    | type_spec IDENTIFIER ASSIGN expr
       {
           bool defaultOk = SA->validateAssignment(*$4, $1, yylineno);
           addFunctionParam(CTX, $1, $2, defaultOk ? $4->place : "", false, yylineno);
           free($4);
           free($2);
       }
-    | CONST type_spec IDENTIFIER ASSIGN literal
+    | CONST type_spec IDENTIFIER ASSIGN expr
       {
           bool defaultOk = SA->validateAssignment(*$5, $2, yylineno);
           addFunctionParam(CTX, $2, $3, defaultOk ? $5->place : "", true, yylineno);
@@ -285,11 +285,6 @@ compound_stmt_func
       {
       leaveScopeWithUnusedWarnings(CTX);
       }
-    | LBRACE error RBRACE
-      {
-          yyerrok;
-          leaveScopeWithUnusedWarnings(CTX);
-      }
     ;
 
 
@@ -339,10 +334,6 @@ while_stmt
       endWhileLoop(CTX, $<sval>2);
           free($<sval>2);
       }
-    | WHILE LPARENTHESIS error RPARENTHESIS stmt
-      {
-          yyerrok;
-      }
     ;
 
 
@@ -359,10 +350,6 @@ do_while_stmt
       {
       endDoWhileLoop(CTX, $<sval>2, $7,yylineno);
           free($<sval>2);
-      }
-    | DO stmt WHILE LPARENTHESIS error RPARENTHESIS SEMICOLON
-      {
-          yyerrok;
       }
     ;
 
@@ -429,16 +416,7 @@ switch_stmt
           endSwitchStatement(CTX, $<sval>5);
           free($<sval>5);
       }
-    | SWITCH LPARENTHESIS error RPARENTHESIS
-      {
-          $<sval>$ = beginSwitchStatement(CTX, new ExprAttr(Type::INT, "0"), yylineno);
-          yyerrok;
-      }
-      LBRACE case_list RBRACE
-      {
-          endSwitchStatement(CTX, $<sval>5);
-          free($<sval>5);
-      }
+
     ;
 
 case_list
@@ -754,8 +732,8 @@ primary_expr
       }
     | literal { $$ = $1; }
     | LPARENTHESIS expr RPARENTHESIS { $$ = $2; }
-    | LPARENTHESIS error RPARENTHESIS 
-      { 
+    | LPARENTHESIS error RPARENTHESIS
+      {
           $$ = new ExprAttr(Type::UNKNOWN, "0");
           yyerrok;
       }

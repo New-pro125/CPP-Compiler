@@ -2,26 +2,26 @@
 
 #include <iostream>
 #include <algorithm>
-void ErrorHandler::addSemanticError(int line, const std::string &msg)
+void ErrorHandler::addSemanticError(int line, const string &msg)
 {
     auto error = CompilerError{
         line, msg, ErrorType::Semantic};
-    std::pair<int, int> errorKey = std::make_pair(error.line, error.errorType);
-    this->errors.insert(std::make_pair(errorKey, error));
+    pair<int, int> errorKey = make_pair(error.line, error.errorType);
+    this->errors.insert(make_pair(errorKey, error));
 }
-void ErrorHandler::addSyntaxError(int line, const std::string &msg)
+void ErrorHandler::addSyntaxError(int line, const string &msg)
 {
     auto error = CompilerError{
         line, msg, ErrorType::Syntax};
-    std::pair<int, int> errorKey = std::make_pair(error.line, error.errorType);
-    this->errors.insert(std::make_pair(errorKey, error));
+    pair<int, int> errorKey = make_pair(error.line, error.errorType);
+    this->errors.insert(make_pair(errorKey, error));
 }
-void ErrorHandler::addWarning(int line, const std::string &msg)
+void ErrorHandler::addWarning(int line, const string &msg)
 {
     auto error = CompilerError{
         line, msg, ErrorType::Warning};
-    std::pair<int, int> errorKey = std::make_pair(error.line, error.errorType);
-    this->errors.insert(std::make_pair(errorKey, error));
+    pair<int, int> errorKey = make_pair(error.line, error.errorType);
+    this->errors.insert(make_pair(errorKey, error));
 }
 bool ErrorHandler::hasErrors() const
 {
@@ -41,14 +41,14 @@ void ErrorHandler::print() const
     {
         if (v.errorType == ErrorType::Warning)
         {
-            std::cout << "\033[33m" << "Warning at Line " << v.line << ": " << v.message << "\n";
-            std::cout << "\033[0m";
+            cout << "\033[33m" << "Warning at Line " << v.line << ": " << v.message << "\n";
+            cout << "\033[0m";
         }
         else
         {
-            std::string error_type = (v.errorType == ErrorType::Semantic) ? "Semantic" : "Syntax";
-            std::cout << "\033[31m" << error_type << " Error at Line " << v.line << ": " << v.message << "\n";
-            std::cout << "\033[0m";
+            string error_type = (v.errorType == ErrorType::Semantic) ? "Semantic" : "Syntax";
+            cout << "\033[31m" << error_type << " Error at Line " << v.line << ": " << v.message << "\n";
+            cout << "\033[0m";
         }
     }
 }
