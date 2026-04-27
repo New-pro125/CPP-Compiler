@@ -293,10 +293,9 @@ void SemanticAnalyzer::exitSwitch()
     switchDepth--;
 }
 
-void SemanticAnalyzer::setCurrentFunction(const std::string &name, Type returnType)
+void SemanticAnalyzer::setCurrentFunction(Type returnType)
 {
     insideFunction = true;
-    (void)name;
     currentFunctionReturnType = returnType;
 }
 
@@ -338,8 +337,7 @@ bool SemanticAnalyzer::validateReturn(Type expected, ExprAttr *value, int line)
     // strings=>exact match only
     if (expected == Type::STRING || value->type == Type::STRING)
     {
-        errorHandler->addSemanticError(line, "Cannot convert return type from '" + typeToString(value->type) +
-                                                 "' to '" + typeToString(expected) + "'");
+        errorHandler->addSemanticError(line, "Cannot convert return type from '" + typeToString(value->type) + "' to '" + typeToString(expected) + "'");
         return false;
     }
 

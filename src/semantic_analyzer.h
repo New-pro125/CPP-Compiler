@@ -53,7 +53,7 @@ public:
     void endSwitchCaseTracking();
     bool validateCaseLabel(const ExprAttr &label, int line);
     bool validateDefaultLabel(int line);
-    void setCurrentFunction(const std::string &name, Type returnType);
+    void setCurrentFunction(Type returnType);
     void clearCurrentFunction();
     Type getCurrentFunctionReturnType() const;
 };

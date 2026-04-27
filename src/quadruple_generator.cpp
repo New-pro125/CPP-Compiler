@@ -36,7 +36,7 @@ void QuadrupleGenerator::rollbackTo(int index)
     if (index < 0)
         index = 0;
     if (index < (int)quads.size())
-        quads.resize((std::size_t)index);
+        quads.resize((int)index);
 }
 
 void QuadrupleGenerator::replaceNames(const std::vector<std::pair<std::string, std::string>> &renameEvents)
