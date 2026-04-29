@@ -46,7 +46,7 @@ bool compare(int x = 0, int y = 0)
 int main()
 {
     string res = concat("b", "c");
-    int result = gcd(func1(10), 4);
+    int result = gcd(func1(10), func1(10));
     float resu = add_half(4);
     func();
     int c_val = do_something(5);
