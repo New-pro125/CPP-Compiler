@@ -7,7 +7,7 @@ void println(string name=rename("ahmed")){
 }
 int main(){
     /*
-        This project is insane
+        This project is insane, It's now Archived. It was fun while it lasted.
     */
     return 0;
 }
