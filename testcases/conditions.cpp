@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 int add()
 {
     int x = 5;
@@ -88,5 +89,54 @@ int main()
     //     sum = sum + 10;
     //     break;
     // }
+=======
+int main()
+{
+    int sum = 0;
+    for (int i = 0; i < 10; ++i)
+    {
+        if (i == 5)
+        {
+            continue;
+        }
+        else if (i == 8)
+        {
+            break;
+        }
+        sum = sum + i;
+    }
+    int k = 0;
+    do
+    {
+        k = k + 1;
+    } while (k < 3);
+    int x = 5;
+    if (x > 3)
+    {
+        int x = 10;
+        x = x + 1;
+    }
+    else
+    {
+        int x = 20;
+        x = x + 2;
+    }
+    x = x + 100;
+    while (k < 5)
+    {
+        k = k + 1;
+    }
+    switch (x)
+    {
+    case 1:
+        sum = sum + 1;
+    case 5:
+        sum = sum + 5;
+        break;
+    default:
+        sum = sum + 10;
+        break;
+    }
+>>>>>>> c65c73a21822f070e50c0b5fc4be4b93061eba4f
     return 0;
 }

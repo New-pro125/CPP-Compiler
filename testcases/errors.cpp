@@ -92,8 +92,12 @@ int main()
     string t = "dd";
     string g = vfun();
     bool flat = s > t;
+<<<<<<< HEAD
     char h = 'w';
     h += t;
+=======
+
+>>>>>>> c65c73a21822f070e50c0b5fc4be4b93061eba4f
     s *= "1";
 
     int m = 10 x = m + 1;
